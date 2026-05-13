@@ -1,0 +1,23 @@
+{
+  "name": "playwright-myportal",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test:login": "playwright test tests/myportal-login.spec.ts --project=chromium",
+    "test:login:report": "node utils/run-and-open-chrome-report.js npx playwright test tests/myportal-login.spec.ts --project=chromium --workers=1 --headed",
+    "test:recharge:report": "node utils/run-and-open-chrome-report.js",
+    "test:recharge": "playwright test tests/recharge-wallet.spec.ts --project=chromium --workers=1 --headed"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^25.6.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
+}
