@@ -1,4 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import fs from 'node:fs';
+import { silentScreenshot } from '../utils/screenshot';
 
 export class MyPortalLoginPage {
   private readonly loginUrl = process.env.MYPORTAL_URL;
@@ -26,7 +28,8 @@ export class MyPortalLoginPage {
     } catch (error) {
       const safeStepName = stepName.replace(/[^a-z0-9-_]/gi, '_').toLowerCase();
       const screenshotPath = `test-results/failure-${safeStepName}-${Date.now()}.png`;
-      await this.page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
+      const buf = await silentScreenshot(this.page);
+      if (buf) fs.writeFileSync(screenshotPath, buf);
       throw error;
     }
   }

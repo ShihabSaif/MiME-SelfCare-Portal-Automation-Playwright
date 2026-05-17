@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
+import { silentScreenshot } from '../utils/screenshot';
 
 export class ServicesPage {
   constructor(private readonly page: Page) {}
@@ -345,9 +346,7 @@ export class ServicesPage {
 
     // Brief pause for the modal UI to show the chosen filename, then capture immediately.
     await this.page.waitForTimeout(300);
-    return this.page
-      .screenshot({ fullPage: false, animations: 'disabled', caret: 'hide' })
-      .catch(() => undefined);
+    return silentScreenshot(this.page);
   }
 
   /**
@@ -361,9 +360,7 @@ export class ServicesPage {
     await upload.scrollIntoViewIfNeeded();
     await upload.click();
 
-    return this.page
-      .screenshot({ fullPage: false, animations: 'disabled', caret: 'hide' })
-      .catch(() => undefined);
+    return silentScreenshot(this.page);
   }
 
   /**
@@ -402,9 +399,7 @@ export class ServicesPage {
     await this.page.waitForTimeout(3500);
 
     // Step 3 — take screenshot; toast is still showing and fully unobscured
-    const screenshot = await this.page
-      .screenshot({ fullPage: false, animations: 'disabled', caret: 'hide' })
-      .catch(() => undefined);
+    const screenshot = await silentScreenshot(this.page);
 
     return {
       ...(feedback ?? { status: 'neutral' as const, message: 'Toast appeared but could not be classified.' }),

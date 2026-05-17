@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
+import { silentScreenshot } from './screenshot';
 
 export type StepStatus = 'success' | 'failed' | 'neutral';
 
@@ -72,14 +73,8 @@ export class HtmlStepReport {
     if (screenshotBuffer) {
       fs.writeFileSync(imagePath, screenshotBuffer);
     } else {
-      await page
-        .screenshot({
-          path: imagePath,
-          fullPage: false,
-          animations: 'disabled',
-          caret: 'hide',
-        })
-        .catch(() => undefined);
+      const buf = await silentScreenshot(page);
+      if (buf) fs.writeFileSync(imagePath, buf);
     }
     state.steps.push({
       section: this.sectionName,

@@ -1,6 +1,8 @@
+import fs from 'node:fs';
 import { test } from '@playwright/test';
 import { RechargeWalletPage } from '../pages/recharge-wallet.page';
 import { HtmlStepReport } from '../utils/html-step-report';
+import { silentScreenshot } from '../utils/screenshot';
 
 test('click recharge wallet using stored login token', async ({ page }, testInfo) => {
   test.setTimeout(120000);
@@ -64,7 +66,8 @@ test('click recharge wallet using stored login token', async ({ page }, testInfo
 
     if (paymentDecision.status === 'failed') {
       const failedScreenshotPath = `test-results/payment-status-failed-${Date.now()}.png`;
-      await paymentDecision.page.screenshot({ path: failedScreenshotPath, fullPage: true }).catch(() => undefined);
+      const buf = await silentScreenshot(paymentDecision.page);
+      if (buf) fs.writeFileSync(failedScreenshotPath, buf);
       await testInfo.attach('payment-status-failed', {
         path: failedScreenshotPath,
         contentType: 'image/png',

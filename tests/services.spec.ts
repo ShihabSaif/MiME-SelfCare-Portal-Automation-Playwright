@@ -147,11 +147,6 @@ test('navigate to Services section from dashboard', async ({ page }) => {
     overall = 'passed';
   } catch (error) {
     overall = 'failed';
-    try {
-      await report.addStep(page, 'Services test failed state', 'failed');
-    } catch {
-      /* ignore screenshot failures */
-    }
     throw error;
   } finally {
     report.finalize(overall);
