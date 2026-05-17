@@ -110,12 +110,29 @@ test('navigate to Services section from dashboard', async ({ page }) => {
         const bulkOnboard3 = await servicesPage.expectBulkOnboardModalVisible();
         await report.addStep(page, 'Kothon: Bulk Onboard modal open (third time)', 'success');
 
-        await servicesPage.chooseBulkOnboardExcelViaBrowse(bulkOnboard3, dupPath);
-        await report.addStep(page, `Kothon: Browse — selected ${dupName}`, 'success');
+        const browseScreenshot = await servicesPage.chooseBulkOnboardExcelViaBrowse(bulkOnboard3, dupPath);
+        await report.addStepWithBuffer(
+          browseScreenshot ?? null,
+          page,
+          `Kothon: Browse — selected ${dupName}`,
+          'success',
+        );
 
-        await servicesPage.clickBulkOnboardModalUpload(bulkOnboard3);
+        const uploadClickScreenshot = await servicesPage.clickBulkOnboardModalUpload(bulkOnboard3);
+        await report.addStepWithBuffer(
+          uploadClickScreenshot ?? null,
+          page,
+          'Kothon: Bulk Onboard Upload button clicked',
+          'success',
+        );
+
         const uploadFeedback = await servicesPage.waitForBulkOnboardUploadFeedback(bulkOnboard3);
-        await report.addStep(page, 'Kothon: Bulk Onboard Upload clicked', uploadFeedback.status);
+        await report.addStepWithBuffer(
+          uploadFeedback.screenshot ?? null,
+          page,
+          `Kothon: Bulk Onboard Upload — ${uploadFeedback.message || uploadFeedback.status}`,
+          uploadFeedback.status,
+        );
         if (uploadFeedback.status === 'failed') {
           throw new Error(`Bulk Onboard upload reported failure: ${uploadFeedback.message}`);
         }

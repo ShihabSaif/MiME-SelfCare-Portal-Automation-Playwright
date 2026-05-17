@@ -316,12 +316,11 @@ export class ServicesPage {
   }
 
   /**
-   * In the Bulk Onboarding modal, pick `filePath` like a user clicking Browse:
-   * Bootstrap-Vue uses a visible `label.custom-file-label` over a hidden
-   * `input[type=file]`. Prefer `filechooser` after clicking the label; if the
-   * chooser does not fire, assign the file directly on the input.
+   * In the Bulk Onboarding modal, pick `filePath` like a user clicking Browse.
+   * Returns a screenshot buffer taken immediately after the file is set so the
+   * report captures the modal with the selected filename before anything changes.
    */
-  async chooseBulkOnboardExcelViaBrowse(modal: Locator, filePath: string): Promise<void> {
+  async chooseBulkOnboardExcelViaBrowse(modal: Locator, filePath: string): Promise<Buffer | undefined> {
     if (!fs.existsSync(filePath)) {
       throw new Error(`Bulk onboard Excel file not found: ${filePath}`);
     }
@@ -343,122 +342,152 @@ export class ServicesPage {
     } else {
       await fileInput.setInputFiles(filePath);
     }
-    await this.page.waitForTimeout(400);
+
+    // Brief pause for the modal UI to show the chosen filename, then capture immediately.
+    await this.page.waitForTimeout(300);
+    return this.page
+      .screenshot({ fullPage: false, animations: 'disabled', caret: 'hide' })
+      .catch(() => undefined);
   }
 
-  /** Click the enabled Upload button in the Bulk Onboarding modal. */
-  async clickBulkOnboardModalUpload(modal: Locator): Promise<void> {
+  /**
+   * Click the enabled Upload button in the Bulk Onboarding modal.
+   * Returns a screenshot taken immediately after the click — before the
+   * browser download bar or toaster can appear and obscure the view.
+   */
+  async clickBulkOnboardModalUpload(modal: Locator): Promise<Buffer | undefined> {
     const upload = modal.getByRole('button', { name: /^upload$/i });
     await expect(upload).toBeEnabled({ timeout: 15000 });
     await upload.scrollIntoViewIfNeeded();
     await upload.click();
+
+    return this.page
+      .screenshot({ fullPage: false, animations: 'disabled', caret: 'hide' })
+      .catch(() => undefined);
   }
 
   /**
-   * After Bulk Onboard upload, wait for visible upload feedback so the report
-   * screenshot captures the alert / toast before the test decides pass or fail.
+   * After Bulk Onboard upload, waits for the Bootstrap-Vue toast using
+   * event-driven DOM observation (waitForSelector) so it is caught the instant
+   * it appears. The app uses #b-toaster-top-right with header.toast-header
+   * ("Error ×" / "Success ×") and div.toast-body for the message.
+   *
+   * The browser's native download bar (from the sample-file download done
+   * earlier) may cover the toast for ~3-4 s. Strategy:
+   *   1. waitForSelector fires instantly when the toast hits the DOM → read
+   *      status/message from the DOM while it is guaranteed present.
+   *   2. Wait 3.5 s for the download bar to clear on its own.
+   *   3. Take the screenshot — toast is still visible and fully unobscured.
    */
   async waitForBulkOnboardUploadFeedback(modal: Locator): Promise<BulkOnboardUploadFeedback> {
-    const started = Date.now();
-    const windowMs = 8000;
-    while (Date.now() - started < windowMs) {
-      const feedback = await this.readBulkOnboardUploadFeedback(modal);
-      if (feedback) return feedback;
-      await this.page.waitForTimeout(400);
+    // Bootstrap-Vue toast container confirmed from app DOM
+    const bvToastSelector = '#b-toaster-top-right .toast, #b-toaster-top-right .toast.show';
+    const fallbackSelector = '.alert-success[role="alert"], .alert-danger[role="alert"]';
+    const anySelector = `${bvToastSelector}, ${fallbackSelector}`;
+
+    try {
+      await this.page.waitForSelector(anySelector, { state: 'visible', timeout: 15000 });
+    } catch {
+      return {
+        status: 'neutral',
+        message: 'No toast/alert appeared after Bulk Onboard upload.',
+        screenshot: undefined,
+      };
     }
 
+    // Step 1 — read status/message from DOM while toast is present
+    const feedback = await this.readBulkOnboardUploadFeedback(modal);
+
+    // Step 2 — wait for browser download bar to clear (~3-4 s after download)
+    await this.page.waitForTimeout(3500);
+
+    // Step 3 — take screenshot; toast is still showing and fully unobscured
+    const screenshot = await this.page
+      .screenshot({ fullPage: false, animations: 'disabled', caret: 'hide' })
+      .catch(() => undefined);
+
     return {
-      status: 'neutral',
-      message: 'No success or error alert appeared after Bulk Onboard upload.',
+      ...(feedback ?? { status: 'neutral' as const, message: 'Toast appeared but could not be classified.' }),
+      screenshot: screenshot ?? undefined,
     };
   }
 
+  /**
+   * Reads the current toast/alert state from the DOM.
+   * Checks Bootstrap-Vue toasts (#b-toaster-top-right) first, using the
+   * header text ("Error" / "Success") confirmed from the live app DOM.
+   *
+   * NOTE: #b-toaster-top-right is a position:fixed portal with no intrinsic
+   * dimensions so isVisible() on the container always returns false — we use
+   * count() / isAttached() instead to detect whether toasts are present.
+   */
   private async readBulkOnboardUploadFeedback(modal: Locator): Promise<BulkOnboardUploadFeedback | null> {
-    const errorToast = this.page
-      .locator(
-        [
-          '.Vue-Toastification__toast--error',
-          '.Vue-Toastification__toast[class*="--error"]',
-          '.Vue-Toastification__toast[class*="toast--error"]',
-          '.Vue-Toastification__toast.danger',
-        ].join(', '),
-      )
-      .filter({ visible: true })
-      .first();
-    if (await errorToast.isVisible().catch(() => false)) {
-      const text = (await errorToast.innerText().catch(() => '')).trim();
-      return { status: 'failed', message: text || 'Vue-Toastification error toast' };
+    // ── Bootstrap-Vue toasts (primary — confirmed from app DOM) ──────────────
+    // The real structure: #b-toaster-top-right .b-toaster-slot > [id$="__toast_outer"] > div.toast
+    // Use a broad selector that covers both the wrapper and the inner toast div.
+    const toasts = this.page.locator('#b-toaster-top-right .toast');
+    const count = await toasts.count().catch(() => 0);
+    for (let i = 0; i < count; i++) {
+      const toast = toasts.nth(i);
+      const headerText = (await toast.locator('header.toast-header').innerText().catch(() => '')).trim();
+      const bodyText   = (await toast.locator('.toast-body').innerText().catch(() => '')).trim();
+      // Walk up to the __toast_outer wrapper to check b-toast-danger / b-toast-success
+      const outerCls   = (await toast.locator('..').getAttribute('class').catch(() => '')) ?? '';
+      const toastCls   = (await toast.getAttribute('class').catch(() => '')) ?? '';
+      const allCls     = `${outerCls} ${toastCls}`;
+      const message    = bodyText || headerText;
+
+      if (!message) continue;
+
+      const isError =
+        /error/i.test(headerText) ||
+        /b-toast-danger|toast-danger|bg-danger/i.test(allCls);
+      const isSuccess =
+        /success/i.test(headerText) ||
+        /b-toast-success|toast-success|bg-success/i.test(allCls);
+
+      if (isError)   return { status: 'failed',  message, screenshot: undefined };
+      if (isSuccess) return { status: 'success', message, screenshot: undefined };
+
+      // Fallback: classify by message text
+      const byText = classifyFeedbackText(message);
+      if (byText) return { status: byText, message, screenshot: undefined };
     }
 
-    const successToast = this.page
-      .locator(
-        [
-          '.Vue-Toastification__toast--success',
-          '.Vue-Toastification__toast[class*="--success"]',
-          '.Vue-Toastification__toast[class*="toast--success"]',
-          '.Vue-Toastification__toast.success',
-        ].join(', '),
-      )
-      .filter({ visible: true })
-      .first();
-    if (await successToast.isVisible().catch(() => false)) {
-      const text = (await successToast.innerText().catch(() => '')).trim();
-      return { status: 'success', message: text || 'Vue-Toastification success toast' };
-    }
-
-    const modalDanger = modal
-      .locator('.alert-danger, .alert.alert-danger, .invalid-feedback')
-      .filter({ visible: true })
-      .first();
+    // ── Modal inline alerts ──────────────────────────────────────────────────
+    const modalDanger = modal.locator('.alert-danger, .invalid-feedback').filter({ visible: true }).first();
     if (await modalDanger.isVisible().catch(() => false)) {
       const text = (await modalDanger.innerText().catch(() => '')).trim();
-      if (text) return { status: 'failed', message: text };
+      if (text) return { status: 'failed', message: text, screenshot: undefined };
     }
 
-    const modalSuccess = modal
-      .locator('.alert-success, .alert.alert-success, .valid-feedback')
-      .filter({ visible: true })
-      .first();
+    const modalSuccess = modal.locator('.alert-success, .valid-feedback').filter({ visible: true }).first();
     if (await modalSuccess.isVisible().catch(() => false)) {
       const text = (await modalSuccess.innerText().catch(() => '')).trim();
-      if (text) return { status: 'success', message: text };
+      if (text) return { status: 'success', message: text, screenshot: undefined };
     }
 
-    const pageDanger = this.page
-      .locator('.alert-danger[role="alert"], .alert.alert-danger[role="alert"]')
-      .filter({ visible: true })
-      .first();
+    // ── Page-level Bootstrap alerts ─────────────────────────────────────────
+    const pageDanger = this.page.locator('.alert-danger[role="alert"]').filter({ visible: true }).first();
     if (await pageDanger.isVisible().catch(() => false)) {
       const text = (await pageDanger.innerText().catch(() => '')).trim();
-      if (text) return { status: 'failed', message: text };
+      if (text) return { status: 'failed', message: text, screenshot: undefined };
     }
 
-    const pageSuccess = this.page
-      .locator('.alert-success[role="alert"], .alert.alert-success[role="alert"]')
-      .filter({ visible: true })
-      .first();
+    const pageSuccess = this.page.locator('.alert-success[role="alert"]').filter({ visible: true }).first();
     if (await pageSuccess.isVisible().catch(() => false)) {
       const text = (await pageSuccess.innerText().catch(() => '')).trim();
-      if (text) return { status: 'success', message: text };
-    }
-
-    const anyToast = this.page.locator('.Vue-Toastification__toast').filter({ visible: true });
-    const n = await anyToast.count();
-    for (let i = 0; i < n; i++) {
-      const t = anyToast.nth(i);
-      const cls = (await t.getAttribute('class')) ?? '';
-      const text = (await t.innerText().catch(() => '')).trim();
-      if (!text) continue;
-      const errorByClass = /--error|toast-error|bg-danger|text-danger|variant-danger/i.test(cls);
-      if (errorByClass) return { status: 'failed', message: text };
-      const successByClass = /--success|toast-success|bg-success|text-success|variant-success/i.test(cls);
-      if (successByClass) return { status: 'success', message: text };
-      const status = classifyFeedbackText(text);
-      if (status) return { status, message: text };
+      if (text) return { status: 'success', message: text, screenshot: undefined };
     }
 
     return null;
   }
+}
+
+export interface BulkOnboardUploadFeedback {
+  status: 'success' | 'failed' | 'neutral';
+  message: string;
+  screenshot?: Buffer;
 }
 
 function classifyFeedbackText(text: string): 'success' | 'failed' | null {
@@ -474,7 +503,3 @@ function escapeRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-interface BulkOnboardUploadFeedback {
-  status: 'success' | 'failed' | 'neutral';
-  message: string;
-}

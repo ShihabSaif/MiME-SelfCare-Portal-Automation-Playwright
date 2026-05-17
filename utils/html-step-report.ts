@@ -52,18 +52,35 @@ export class HtmlStepReport {
   }
 
   async addStep(page: Page, title: string, status: StepStatus = 'success'): Promise<void> {
+    await this.addStepWithBuffer(null, page, title, status);
+  }
+
+  /**
+   * Like `addStep` but writes a pre-captured screenshot buffer instead of
+   * taking a new live screenshot. Pass `null` to fall back to a live capture.
+   */
+  async addStepWithBuffer(
+    screenshotBuffer: Buffer | null,
+    page: Page,
+    title: string,
+    status: StepStatus = 'success',
+  ): Promise<void> {
     const state = this.readState();
     this.stepIndex = state.steps.length + 1;
     const imageFile = `step-${String(this.stepIndex).padStart(2, '0')}.png`;
     const imagePath = path.join(this.reportDir, imageFile);
-    await page
-      .screenshot({
-        path: imagePath,
-        fullPage: false,
-        animations: 'disabled',
-        caret: 'hide',
-      })
-      .catch(() => undefined);
+    if (screenshotBuffer) {
+      fs.writeFileSync(imagePath, screenshotBuffer);
+    } else {
+      await page
+        .screenshot({
+          path: imagePath,
+          fullPage: false,
+          animations: 'disabled',
+          caret: 'hide',
+        })
+        .catch(() => undefined);
+    }
     state.steps.push({
       section: this.sectionName,
       title,
