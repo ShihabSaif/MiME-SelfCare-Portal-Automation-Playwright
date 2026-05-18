@@ -271,4 +271,38 @@ export class RechargeWalletPage {
 
     return { status: 'unknown', page: gatewayPage };
   }
+
+  /**
+   * Clicks the "Check Balance" button in the navbar
+   * (confirmed DOM: .bookmark-wrapper li.nav-item button.btn.btn-sm > span > span).
+   * Waits 2.5 s for the balance to render, then returns a screenshot.
+   */
+  async clickCheckBalance(): Promise<ToastCapture> {
+    const btn = this.page
+      .locator('.bookmark-wrapper li.nav-item button.btn')
+      .filter({ hasText: /check balance/i })
+      .first();
+
+    await btn.waitFor({ state: 'visible', timeout: 10000 });
+    await btn.click();
+
+    // Wait for the balance popup to appear
+    await this.page.waitForTimeout(2500);
+    return captureAndReadToast(this.page);
+  }
+
+  /**
+   * Clicks the navbar dark-mode toggle (moon icon in a.nav-link).
+   * Waits for the theme transition, then returns a screenshot buffer.
+   */
+  async clickDarkModeToggle(): Promise<Buffer | null> {
+    const toggle = await this.firstVisible([
+      this.page.locator('a.nav-link:has(svg.feather-moon)'),
+      this.page.locator('a.nav-link:has(.feather-moon)'),
+    ]);
+
+    await toggle.click();
+    await this.page.waitForTimeout(this.visualDelayMs);
+    return (await silentScreenshot(this.page)) ?? null;
+  }
 }
