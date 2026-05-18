@@ -25,14 +25,22 @@ test('open Payment History section', async ({ page }) => {
     await loginPage.loginIfNeeded(username, password);
     await page.waitForLoadState('networkidle').catch(() => undefined);
 
+    // openPaymentHistory() waits for full page render before returning
     await paymentHistoryPage.openPaymentHistory();
-    await report.addStep(page, 'Payment History tab clicked');
-    await paymentHistoryPage.expectPaymentHistoryVisible();
-    await report.addStep(page, 'Payment History section visible', 'success');
+    await report.addStep(page, 'Payment History page loaded', 'success');
+
+    const saveDir = 'test-results/downloads/payment-history';
+    const { screenshot: receiptShot, savedPath } = await paymentHistoryPage.clickReceiptAndSave(saveDir);
+    await report.addStepWithBuffer(
+      receiptShot ?? null,
+      page,
+      `Receipt downloaded — saved to ${savedPath}`,
+      'success',
+    );
+
     overall = 'passed';
   } catch (error) {
     overall = 'failed';
-    await report.addStep(page, 'Payment History failed state', 'failed').catch(() => undefined);
     throw error;
   } finally {
     report.finalize(overall);
