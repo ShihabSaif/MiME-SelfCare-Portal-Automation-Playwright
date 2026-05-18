@@ -1,6 +1,7 @@
 import { test } from '@playwright/test';
 import { MyPortalLoginPage } from '../pages/myportal-login.page';
 import { PaymentHistoryPage } from '../pages/payment-history.page';
+import { logFlowFailure } from '../utils/flow-test';
 import { HtmlStepReport } from '../utils/html-step-report';
 
 test('open Payment History section', async ({ page }) => {
@@ -41,7 +42,8 @@ test('open Payment History section', async ({ page }) => {
     overall = 'passed';
   } catch (error) {
     overall = 'failed';
-    throw error;
+    logFlowFailure('Payment History', error);
+    await report.addStep(page, 'Payment History failed state', 'failed').catch(() => undefined);
   } finally {
     report.finalize(overall);
   }

@@ -1,6 +1,7 @@
 import { test } from '@playwright/test';
 import { MyPortalLoginPage } from '../pages/myportal-login.page';
 import { WalletTransferPage } from '../pages/wallet-transfer.page';
+import { logFlowFailure } from '../utils/flow-test';
 import { HtmlStepReport } from '../utils/html-step-report';
 
 test('open Wallet Transfer section', async ({ page }) => {
@@ -32,8 +33,8 @@ test('open Wallet Transfer section', async ({ page }) => {
     overall = 'passed';
   } catch (error) {
     overall = 'failed';
+    logFlowFailure('Wallet Transfer', error);
     await report.addStep(page, 'Wallet Transfer failed state', 'failed').catch(() => undefined);
-    throw error;
   } finally {
     report.finalize(overall);
   }

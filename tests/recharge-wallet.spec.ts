@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { test } from '@playwright/test';
 import { RechargeWalletPage } from '../pages/recharge-wallet.page';
+import { logFlowFailure } from '../utils/flow-test';
 import { HtmlStepReport } from '../utils/html-step-report';
 import { captureAndReadToast, silentScreenshot } from '../utils/screenshot';
 
@@ -102,11 +103,12 @@ test('click recharge wallet using stored login token', async ({ page }, testInfo
     const darkModeScreenshot = await rechargeWalletPage.clickDarkModeToggle();
     await report.addStepWithBuffer(darkModeScreenshot, page, 'Dark mode', 'success');
 
-    if (rechargePassed) overall = 'passed';
+    if (rechargePassed && overall !== 'failed') overall = 'passed';
 
   } catch (error) {
     overall = 'failed';
-    throw error;
+    logFlowFailure('Recharge', error);
+    await report.addStepWithBuffer(await silentScreenshot(page) ?? null, page, 'Recharge section failed state', 'failed').catch(() => undefined);
   } finally {
     report.finalize(overall);
     if (process.env.PAUSE_AFTER_RECHARGE === '1') {

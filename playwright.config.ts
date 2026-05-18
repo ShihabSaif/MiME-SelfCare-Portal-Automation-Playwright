@@ -17,6 +17,7 @@ const desktopChrome = { ...devices['Desktop Chrome'] };
  */
 export default defineConfig({
   testDir: './tests',
+  globalTeardown: require.resolve('./utils/global-teardown'),
   /* Serial flow: login → services → recharge → … → my-profile */
   fullyParallel: false,
   /* Fail the build on CI if you accidentally left test.only in the source code. */

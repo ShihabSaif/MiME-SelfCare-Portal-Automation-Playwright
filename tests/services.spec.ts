@@ -3,7 +3,9 @@ import path from 'node:path';
 import { test } from '@playwright/test';
 import { MyPortalLoginPage } from '../pages/myportal-login.page';
 import { ServicesPage } from '../pages/services.page';
+import { logFlowFailure } from '../utils/flow-test';
 import { HtmlStepReport } from '../utils/html-step-report';
+import { silentScreenshot } from '../utils/screenshot';
 
 test('navigate to Services section from dashboard', async ({ page }) => {
   test.setTimeout(120000);
@@ -134,20 +136,31 @@ test('navigate to Services section from dashboard', async ({ page }) => {
           uploadFeedback.status,
         );
         if (uploadFeedback.status === 'failed') {
-          throw new Error(`Bulk Onboard upload reported failure: ${uploadFeedback.message}`);
-        }
-
-        if (await bulkOnboard3.isVisible().catch(() => false)) {
+          if (await bulkOnboard3.isVisible().catch(() => false)) {
+            await servicesPage.closeModalWithHeaderCross(bulkOnboard3);
+            await page.waitForTimeout(400);
+            const closedAfterErrorScreenshot = await silentScreenshot(page);
+            await report.addStepWithBuffer(
+              closedAfterErrorScreenshot ?? null,
+              page,
+              'Kothon: Bulk Onboard modal closed after upload error',
+              'success',
+            );
+          }
+          logFlowFailure('Service', new Error(`Bulk Onboard upload: ${uploadFeedback.message}`));
+          overall = 'failed';
+        } else if (await bulkOnboard3.isVisible().catch(() => false)) {
           await servicesPage.closeModalWithHeaderCross(bulkOnboard3);
           await report.addStep(page, 'Kothon: Bulk Onboard modal closed after upload', 'success');
         }
       }
     }
 
-    overall = 'passed';
+    if (overall !== 'failed') overall = 'passed';
   } catch (error) {
     overall = 'failed';
-    throw error;
+    logFlowFailure('Service', error);
+    await report.addStep(page, 'Services section failed state', 'failed').catch(() => undefined);
   } finally {
     report.finalize(overall);
   }

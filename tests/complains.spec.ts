@@ -1,6 +1,7 @@
 import { test } from '@playwright/test';
 import { MyPortalLoginPage } from '../pages/myportal-login.page';
 import { ComplainsPage } from '../pages/complains.page';
+import { logFlowFailure } from '../utils/flow-test';
 import { HtmlStepReport } from '../utils/html-step-report';
 
 test('open Complains section', async ({ page }) => {
@@ -70,16 +71,19 @@ test('open Complains section', async ({ page }) => {
       await report.addStep(page, 'Ticket created and back to Complains list', 'success');
     } catch (ticketError) {
       await report.addStep(page, 'Ticket creation failed', 'failed').catch(() => undefined);
-      throw ticketError;
+      logFlowFailure('Complains', ticketError);
+      overall = 'failed';
     }
 
-    overall = 'passed';
+    if (overall !== 'failed') overall = 'passed';
   } catch (error) {
     overall = 'failed';
+    logFlowFailure('Complains', error);
     await report.addStep(page, 'Complains failed state', 'failed').catch(() => undefined);
-    throw error;
   } finally {
     report.finalize(overall);
-    await page.pause();
+    if (process.env.PAUSE_AFTER_COMPLAINS === '1') {
+      await page.pause();
+    }
   }
 });

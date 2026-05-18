@@ -1,6 +1,7 @@
 import { test } from '@playwright/test';
 import { MyPortalLoginPage } from '../pages/myportal-login.page';
 import { MyProfilePage } from '../pages/my-profile.page';
+import { logFlowFailure } from '../utils/flow-test';
 import { HtmlStepReport } from '../utils/html-step-report';
 
 test('open My Profile section', async ({ page }) => {
@@ -41,8 +42,8 @@ test('open My Profile section', async ({ page }) => {
     overall = 'passed';
   } catch (error) {
     overall = 'failed';
+    logFlowFailure('My Profile', error);
     await report.addStep(page, 'My Profile failed state', 'failed').catch(() => undefined);
-    throw error;
   } finally {
     report.finalize(overall);
   }
