@@ -1,4 +1,5 @@
 import { type Locator, type Page } from '@playwright/test';
+import { captureAndReadToast, silentScreenshot, type ToastCapture } from '../utils/screenshot';
 
 export type PaymentStatus = 'success' | 'failed' | 'unknown';
 
@@ -148,7 +149,7 @@ export class RechargeWalletPage {
     throw new Error('PIN input is not visible on bKash gateway page.');
   }
 
-  async openWalletsAndClickRechargeWallet(): Promise<void> {
+  async openWalletsAndClickRechargeWallet(): Promise<ToastCapture> {
     const walletsMenu = await this.walletsMenu();
     await walletsMenu.click();
 
@@ -156,9 +157,16 @@ export class RechargeWalletPage {
     await rechargeLink.click();
     await this.page.waitForLoadState('networkidle').catch(() => undefined);
     await this.page.waitForTimeout(this.visualDelayMs);
+    return captureAndReadToast(this.page);
   }
 
-  async enterAmountAndPayWithBkash(amount: string): Promise<Page> {
+  /**
+   * Fills the amount and clicks "Pay with bKash".
+   * Waits 1.5 s then reads the main portal page for any error toaster
+   * (e.g. minimum amount not met). Returns the gateway page plus a
+   * ToastCapture so the spec can immediately fail if an error was shown.
+   */
+  async enterAmountAndPayWithBkash(amount: string): Promise<{ gatewayPage: Page; toast: ToastCapture }> {
     const amountInput = await this.amountInput();
     await amountInput.fill(amount);
     await this.page.waitForTimeout(this.visualDelayMs);
@@ -167,13 +175,17 @@ export class RechargeWalletPage {
     const popupPromise = this.page.context().waitForEvent('page', { timeout: 10000 }).catch(() => null);
     await payWithBkash.click();
 
+    // Wait 1.5 s then capture — gives error toasters time to appear on the portal
+    await this.page.waitForTimeout(1500);
+    const toast = await captureAndReadToast(this.page);
+
     const popupPage = await popupPromise;
     const gatewayPage = popupPage ?? this.page;
     await gatewayPage.waitForLoadState('domcontentloaded').catch(() => undefined);
-    return gatewayPage;
+    return { gatewayPage, toast };
   }
 
-  async enterBkashNumberAndSubmit(gatewayPage: Page, bkashNumber: string): Promise<void> {
+  async enterBkashNumberAndSubmit(gatewayPage: Page, bkashNumber: string): Promise<ToastCapture> {
     await gatewayPage.waitForTimeout(this.visualDelayMs);
 
     const numberInput = await this.bkashNumberInput(gatewayPage);
@@ -182,9 +194,10 @@ export class RechargeWalletPage {
 
     const submitButton = await this.bkashSubmitButton(gatewayPage);
     await submitButton.click();
+    return captureAndReadToast(gatewayPage);
   }
 
-  async enterVerificationCodeAndConfirm(gatewayPage: Page, verificationCode: string): Promise<void> {
+  async enterVerificationCodeAndConfirm(gatewayPage: Page, verificationCode: string): Promise<ToastCapture> {
     await gatewayPage.waitForTimeout(this.visualDelayMs);
 
     const verificationCodeInput = await this.bkashVerificationCodeInput(gatewayPage);
@@ -193,9 +206,10 @@ export class RechargeWalletPage {
 
     const confirmButton = await this.bkashSubmitButton(gatewayPage);
     await confirmButton.click();
+    return captureAndReadToast(gatewayPage);
   }
 
-  async enterPinAndConfirm(gatewayPage: Page, pin: string): Promise<void> {
+  async enterPinAndConfirm(gatewayPage: Page, pin: string): Promise<ToastCapture> {
     await gatewayPage.waitForTimeout(this.visualDelayMs);
 
     const pinInput = await this.bkashPinInput(gatewayPage);
@@ -204,6 +218,11 @@ export class RechargeWalletPage {
 
     const confirmButton = await this.bkashSubmitButton(gatewayPage);
     await confirmButton.click();
+    return captureAndReadToast(gatewayPage);
+  }
+
+  async captureGatewayPage(gatewayPage: Page): Promise<ToastCapture> {
+    return captureAndReadToast(gatewayPage);
   }
 
   private inferStatusFromText(rawText: string): PaymentStatus {

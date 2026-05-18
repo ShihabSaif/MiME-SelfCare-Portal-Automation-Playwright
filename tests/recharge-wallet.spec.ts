@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { test } from '@playwright/test';
 import { RechargeWalletPage } from '../pages/recharge-wallet.page';
 import { HtmlStepReport } from '../utils/html-step-report';
-import { silentScreenshot } from '../utils/screenshot';
+import { captureAndReadToast, silentScreenshot } from '../utils/screenshot';
 
 test('click recharge wallet using stored login token', async ({ page }, testInfo) => {
   test.setTimeout(120000);
@@ -21,57 +21,59 @@ test('click recharge wallet using stored login token', async ({ page }, testInfo
   const rechargeWalletPage = new RechargeWalletPage(page);
   let pausePage = page;
   let overall: 'passed' | 'failed' | 'incomplete' = 'incomplete';
-  let finalStepRecorded = false;
 
   try {
     await page.goto(process.env.MYPORTAL_URL || 'https://mctest-myportal.mimebd.com/', {
       waitUntil: 'domcontentloaded',
     });
-    await report.addStep(page, 'Landing page');
+    await report.addStepWithBuffer(await silentScreenshot(page) ?? null, page, 'Landing page');
     await page.waitForLoadState('networkidle').catch(() => undefined);
 
-    await report.addStep(page, 'After login');
+    await report.addStepWithBuffer(await silentScreenshot(page) ?? null, page, 'After login');
 
-    await rechargeWalletPage.openWalletsAndClickRechargeWallet();
-    await report.addStep(page, 'Recharge wallet page');
+    const rechargeToast = await rechargeWalletPage.openWalletsAndClickRechargeWallet();
+    await report.addStepWithBuffer(rechargeToast.screenshot ?? null, page, 'Recharge wallet page', toastBadge(rechargeToast.status, 'success'));
+    if (rechargeToast.status === 'failed') throw new Error(`Recharge wallet page error: ${rechargeToast.message}`);
 
-    const gatewayPage = await rechargeWalletPage.enterAmountAndPayWithBkash('12');
+    const { gatewayPage, toast: amountToast } = await rechargeWalletPage.enterAmountAndPayWithBkash('12');
     pausePage = gatewayPage;
-    await report.addStep(gatewayPage, 'Amount given and bKash selected');
+    await report.addStepWithBuffer(amountToast.screenshot ?? null, gatewayPage, `Amount given and bKash selected — ${amountToast.message || amountToast.status}`, toastBadge(amountToast.status, 'success'));
+    if (amountToast.status === 'failed') throw new Error(`Pay with bKash error: ${amountToast.message}`);
 
-    await rechargeWalletPage.enterBkashNumberAndSubmit(gatewayPage, bkashNumber);
-    await report.addStep(gatewayPage, 'bKash number given');
+    const bkashNumberToast = await rechargeWalletPage.enterBkashNumberAndSubmit(gatewayPage, bkashNumber);
+    await report.addStepWithBuffer(bkashNumberToast.screenshot ?? null, gatewayPage, `bKash number given — ${bkashNumberToast.message || bkashNumberToast.status}`, toastBadge(bkashNumberToast.status, 'success'));
+    if (bkashNumberToast.status === 'failed') throw new Error(`bKash number submit error: ${bkashNumberToast.message}`);
 
     await gatewayPage.waitForLoadState('domcontentloaded').catch(() => undefined);
     await gatewayPage.waitForTimeout(500);
-    await report.addStep(gatewayPage, 'Confirmation given');
+    const confirmToast = await captureAndReadToast(gatewayPage);
+    await report.addStepWithBuffer(confirmToast.screenshot ?? null, gatewayPage, 'Confirmation given', toastBadge(confirmToast.status, 'success'));
+    if (confirmToast.status === 'failed') throw new Error(`Confirmation error: ${confirmToast.message}`);
 
-    await rechargeWalletPage.enterVerificationCodeAndConfirm(gatewayPage, bkashVerificationCode);
-    await report.addStep(gatewayPage, 'OTP given');
+    const otpToast = await rechargeWalletPage.enterVerificationCodeAndConfirm(gatewayPage, bkashVerificationCode);
+    await report.addStepWithBuffer(otpToast.screenshot ?? null, gatewayPage, `OTP given — ${otpToast.message || otpToast.status}`, toastBadge(otpToast.status, 'success'));
+    if (otpToast.status === 'failed') throw new Error(`OTP error: ${otpToast.message}`);
 
-    await rechargeWalletPage.enterPinAndConfirm(gatewayPage, bkashPin);
+    const pinToast = await rechargeWalletPage.enterPinAndConfirm(gatewayPage, bkashPin);
+    await report.addStepWithBuffer(pinToast.screenshot ?? null, gatewayPage, `PIN given — ${pinToast.message || pinToast.status}`, toastBadge(pinToast.status, 'success'));
+    if (pinToast.status === 'failed') throw new Error(`PIN error: ${pinToast.message}`);
 
     const paymentDecision = await rechargeWalletPage.waitForDashboardAndGetPaymentStatus(gatewayPage);
     pausePage = paymentDecision.page;
 
     const finalStatusLabel =
-      paymentDecision.status === 'success'
-        ? 'Final: success page'
-        : paymentDecision.status === 'failed'
-          ? 'Final: failed page'
-          : 'Final: unknown payment status';
+      paymentDecision.status === 'success' ? 'Final: payment successful' :
+      paymentDecision.status === 'failed'  ? 'Final: payment failed'     :
+                                             'Final: unknown payment status';
     const finalBadge = paymentDecision.status === 'success' ? 'success' : paymentDecision.status === 'failed' ? 'failed' : 'neutral';
-    await report.addStep(paymentDecision.page, finalStatusLabel, finalBadge);
-    finalStepRecorded = true;
+    const finalToast = await captureAndReadToast(paymentDecision.page);
+    await report.addStepWithBuffer(finalToast.screenshot ?? null, paymentDecision.page, finalStatusLabel, finalBadge);
 
     if (paymentDecision.status === 'failed') {
       const failedScreenshotPath = `test-results/payment-status-failed-${Date.now()}.png`;
-      const buf = await silentScreenshot(paymentDecision.page);
+      const buf = finalToast.screenshot ?? await silentScreenshot(paymentDecision.page);
       if (buf) fs.writeFileSync(failedScreenshotPath, buf);
-      await testInfo.attach('payment-status-failed', {
-        path: failedScreenshotPath,
-        contentType: 'image/png',
-      });
+      await testInfo.attach('payment-status-failed', { path: failedScreenshotPath, contentType: 'image/png' });
       overall = 'failed';
       throw new Error('Payment status is failed/invalid after returning to dashboard.');
     }
@@ -83,16 +85,7 @@ test('click recharge wallet using stored login token', async ({ page }, testInfo
 
     overall = 'passed';
   } catch (error) {
-    if (!finalStepRecorded) {
-      overall = 'failed';
-      try {
-        await report.addStep(pausePage, 'Failure — state when error occurred', 'failed');
-      } catch {
-        /* ignore */
-      }
-    } else if (overall === 'incomplete') {
-      overall = 'failed';
-    }
+    overall = 'failed';
     throw error;
   } finally {
     report.finalize(overall);
@@ -101,3 +94,18 @@ test('click recharge wallet using stored login token', async ({ page }, testInfo
     }
   }
 });
+
+/**
+ * Maps a ToastCapture status to an HTML report badge.
+ * `defaultForNone` controls what badge to use when no toast was detected:
+ *  - 'success' for navigation/action steps where no toast = everything is fine
+ *  - 'neutral' for outcome steps where we're explicitly waiting for a result
+ */
+function toastBadge(
+  status: 'success' | 'failed' | 'none',
+  defaultForNone: 'success' | 'neutral' = 'neutral',
+): 'success' | 'failed' | 'neutral' {
+  if (status === 'success') return 'success';
+  if (status === 'failed')  return 'failed';
+  return defaultForNone;
+}
