@@ -4,10 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test:login": "playwright test tests/myportal-login.spec.ts --project=chromium",
-    "test:login:report": "node utils/run-and-open-chrome-report.js npx playwright test tests/myportal-login.spec.ts --project=chromium --workers=1 --headed",
-    "test:recharge:report": "node utils/run-and-open-chrome-report.js",
-    "test:recharge": "playwright test tests/recharge-wallet.spec.ts --project=chromium --workers=1 --headed"
+    "test:flow": "playwright test --workers=1 --headed",
+    "test:flow:report": "node utils/run-and-open-chrome-report.js npx playwright test --workers=1 --headed",
+    "test:login": "playwright test tests/myportal-login.spec.ts --project=login",
+    "test:login:report": "node utils/run-and-open-chrome-report.js npx playwright test tests/myportal-login.spec.ts --project=login --workers=1 --headed",
+    "test:recharge:report": "node utils/run-and-open-chrome-report.js npx playwright test tests/recharge-wallet.spec.ts --project=recharge-wallet --workers=1 --headed",
+    "test:recharge": "playwright test tests/recharge-wallet.spec.ts --project=recharge-wallet --workers=1 --headed"
   },
   "keywords": [],
   "author": "",

@@ -4,8 +4,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const projectRoot = path.join(__dirname, '..');
 const preferredPort = Number(process.env.PLAYWRIGHT_REPORT_PORT || 9324);
 
-const defaultTestCmd =
-  'npx playwright test tests/recharge-wallet.spec.ts --project=chromium --workers=1 --headed';
+const defaultTestCmd = 'npx playwright test --workers=1 --headed';
 const testCommand = process.argv.slice(2).join(' ').trim() || defaultTestCmd;
 
 let reportOpened = false;

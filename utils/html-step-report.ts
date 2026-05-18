@@ -98,8 +98,8 @@ export class HtmlStepReport {
 
     const orderedSections = [
       'Login',
-      'Recharge',
       'Service',
+      'Recharge',
       'Wallet Transfer',
       'Payment History',
       'Inventory',

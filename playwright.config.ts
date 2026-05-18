@@ -9,13 +9,16 @@ import dotenv from 'dotenv';
 // dotenv.config({ path: path.resolve(__dirname, '.env') });
 dotenv.config();
 
+const authFile = 'playwright/.auth/user.json';
+const desktopChrome = { ...devices['Desktop Chrome'] };
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
   testDir: './tests',
-  /* Run tests in files in parallel */
-  fullyParallel: true,
+  /* Serial flow: login → services → recharge → … → my-profile */
+  fullyParallel: false,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
@@ -35,21 +38,58 @@ export default defineConfig({
     headless: false,
   },
 
-  /* Configure projects for major browsers */
+  /*
+   * Ordered flow (each project depends on the previous):
+   * login → services → recharge-wallet → wallet-transfer → payment-history
+   *       → inventory → complains → my-profile
+   */
   projects: [
     {
-      name: 'setup',
-      testMatch: /.*myportal-login\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'] },
+      name: 'login',
+      testMatch: /myportal-login\.spec\.ts/,
+      use: { ...desktopChrome },
     },
     {
-      name: 'chromium',
-      testIgnore: [/.*\.setup\.spec\.ts/, /.*myportal-login\.spec\.ts/],
-      use: {
-        ...devices['Desktop Chrome'],
-        storageState: 'playwright/.auth/user.json',
-      },
-      dependencies: ['setup'],
+      name: 'services',
+      testMatch: /services\.spec\.ts/,
+      use: { ...desktopChrome, storageState: authFile },
+      dependencies: ['login'],
+    },
+    {
+      name: 'recharge-wallet',
+      testMatch: /recharge-wallet\.spec\.ts/,
+      use: { ...desktopChrome, storageState: authFile },
+      dependencies: ['services'],
+    },
+    {
+      name: 'wallet-transfer',
+      testMatch: /wallet-transfer\.spec\.ts/,
+      use: { ...desktopChrome, storageState: authFile },
+      dependencies: ['recharge-wallet'],
+    },
+    {
+      name: 'payment-history',
+      testMatch: /payment-history\.spec\.ts/,
+      use: { ...desktopChrome, storageState: authFile },
+      dependencies: ['wallet-transfer'],
+    },
+    {
+      name: 'inventory',
+      testMatch: /inventory\.spec\.ts/,
+      use: { ...desktopChrome, storageState: authFile },
+      dependencies: ['payment-history'],
+    },
+    {
+      name: 'complains',
+      testMatch: /complains\.spec\.ts/,
+      use: { ...desktopChrome, storageState: authFile },
+      dependencies: ['inventory'],
+    },
+    {
+      name: 'my-profile',
+      testMatch: /my-profile\.spec\.ts/,
+      use: { ...desktopChrome, storageState: authFile },
+      dependencies: ['complains'],
     },
 
     /* Test against mobile viewports. */
