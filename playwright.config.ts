@@ -40,9 +40,9 @@ export default defineConfig({
   },
 
   /*
-   * Ordered flow (each project depends on the previous):
-   * login → services → recharge-wallet → wallet-transfer → payment-history
-   *       → inventory → complains → my-profile
+   * Full-suite order: projects are listed in run order; workers=1 runs them serially.
+   * Each section depends only on login so filtering one spec file does not pull the
+   * entire chain (Playwright always runs project dependencies).
    */
   projects: [
     {
@@ -60,37 +60,37 @@ export default defineConfig({
       name: 'recharge-wallet',
       testMatch: /recharge-wallet\.spec\.ts/,
       use: { ...desktopChrome, storageState: authFile },
-      dependencies: ['services'],
+      dependencies: ['login'],
     },
     {
       name: 'wallet-transfer',
       testMatch: /wallet-transfer\.spec\.ts/,
       use: { ...desktopChrome, storageState: authFile },
-      dependencies: ['recharge-wallet'],
+      dependencies: ['login'],
     },
     {
       name: 'payment-history',
       testMatch: /payment-history\.spec\.ts/,
       use: { ...desktopChrome, storageState: authFile },
-      dependencies: ['wallet-transfer'],
+      dependencies: ['login'],
     },
     {
       name: 'inventory',
       testMatch: /inventory\.spec\.ts/,
       use: { ...desktopChrome, storageState: authFile },
-      dependencies: ['payment-history'],
+      dependencies: ['login'],
     },
     {
       name: 'complains',
       testMatch: /complains\.spec\.ts/,
       use: { ...desktopChrome, storageState: authFile },
-      dependencies: ['inventory'],
+      dependencies: ['login'],
     },
     {
       name: 'my-profile',
       testMatch: /my-profile\.spec\.ts/,
       use: { ...desktopChrome, storageState: authFile },
-      dependencies: ['complains'],
+      dependencies: ['login'],
     },
 
     /* Test against mobile viewports. */
