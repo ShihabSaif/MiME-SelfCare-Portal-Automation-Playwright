@@ -10,7 +10,7 @@ test('standalone login to MiME Self-Care', async ({ page }) => {
     throw new Error('Missing MYPORTAL_USERNAME or MYPORTAL_PASSWORD in environment variables.');
   }
 
-  const report = new HtmlStepReport('test-results', 'Login');
+  const report = new HtmlStepReport('Login');
   report.reset();
   const loginPage = new MyPortalLoginPage(page);
   await loginPage.goto();

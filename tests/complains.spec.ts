@@ -7,7 +7,7 @@ import { HtmlStepReport } from '../utils/html-step-report';
 test('open Complains section', async ({ page }) => {
   test.setTimeout(90000);
 
-  const report = new HtmlStepReport('test-results', 'Complains');
+  const report = new HtmlStepReport('Complains');
   const loginPage = new MyPortalLoginPage(page);
   const complainsPage = new ComplainsPage(page);
   const username = process.env.MYPORTAL_USERNAME;

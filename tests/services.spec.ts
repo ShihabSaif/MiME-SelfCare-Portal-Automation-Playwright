@@ -10,7 +10,7 @@ import { silentScreenshot } from '../utils/screenshot';
 test('navigate to Services section from dashboard', async ({ page }) => {
   test.setTimeout(120000);
 
-  const report = new HtmlStepReport('test-results', 'Service');
+  const report = new HtmlStepReport('Service');
   const loginPage = new MyPortalLoginPage(page);
   const servicesPage = new ServicesPage(page);
   let overall: 'passed' | 'failed' | 'incomplete' = 'incomplete';

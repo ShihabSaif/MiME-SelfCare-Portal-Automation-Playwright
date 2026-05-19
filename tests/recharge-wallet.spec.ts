@@ -18,7 +18,7 @@ test('click recharge wallet using stored login token', async ({ page }, testInfo
     );
   }
 
-  const report = new HtmlStepReport('test-results', 'Recharge');
+  const report = new HtmlStepReport('Recharge');
   const rechargeWalletPage = new RechargeWalletPage(page);
   let overall: 'passed' | 'failed' | 'incomplete' = 'incomplete';
   let rechargePassed = false;

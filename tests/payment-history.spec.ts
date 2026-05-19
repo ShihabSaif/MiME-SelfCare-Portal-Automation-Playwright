@@ -7,7 +7,7 @@ import { HtmlStepReport } from '../utils/html-step-report';
 test('open Payment History section', async ({ page }) => {
   test.setTimeout(90000);
 
-  const report = new HtmlStepReport('test-results', 'Payment History');
+  const report = new HtmlStepReport('Payment History');
   const loginPage = new MyPortalLoginPage(page);
   const paymentHistoryPage = new PaymentHistoryPage(page);
   const username = process.env.MYPORTAL_USERNAME;

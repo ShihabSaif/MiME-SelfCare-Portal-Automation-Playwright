@@ -14,26 +14,85 @@ export interface ReportStep {
   url: string;
 }
 
-function formatTimestampForFilename(): string {
-  const d = new Date();
+/** Outside Playwright's outputDir — Playwright wipes test-results/ each run. */
+export const DEFAULT_FLOW_REPORT_BASE = path.join(process.cwd(), 'flow-reports');
+
+const CURRENT_RUN_POINTER = '.current-run';
+
+/** e.g. 2026-05-18_06-34-22-712-PM */
+export function formatTimestampForFilename(date = new Date()): string {
   const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;
+  const hours24 = date.getHours();
+  const ampm = hours24 >= 12 ? 'PM' : 'AM';
+  let hours12 = hours24 % 12;
+  if (hours12 === 0) hours12 = 12;
+  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}_${p(hours12)}-${p(date.getMinutes())}-${p(date.getSeconds())}-${p(date.getMilliseconds())}-${ampm}`;
+}
+
+function reportRoot(baseDir: string): string {
+  return baseDir;
+}
+
+function currentRunPointerPath(baseDir: string): string {
+  return path.join(reportRoot(baseDir), CURRENT_RUN_POINTER);
+}
+
+function writeCurrentRunPointer(baseDir: string, runDir: string): void {
+  const root = reportRoot(baseDir);
+  fs.mkdirSync(root, { recursive: true });
+  fs.writeFileSync(currentRunPointerPath(baseDir), runDir, 'utf8');
+  fs.writeFileSync(path.join(root, 'latest.txt'), runDir, 'utf8');
+}
+
+/** Starts a new dated run folder; previous run folders are never deleted. */
+export function startNewFlowReportRun(baseDir = DEFAULT_FLOW_REPORT_BASE): string {
+  const runId = formatTimestampForFilename();
+  const runDir = path.join(reportRoot(baseDir), runId);
+  fs.mkdirSync(runDir, { recursive: true });
+  writeCurrentRunPointer(baseDir, runDir);
+  return runDir;
+}
+
+/** Resolves the active run directory for this suite execution. */
+export function resolveFlowReportRunDir(baseDir = DEFAULT_FLOW_REPORT_BASE): string {
+  const pointer = currentRunPointerPath(baseDir);
+  if (fs.existsSync(pointer)) {
+    const runDir = fs.readFileSync(pointer, 'utf8').trim();
+    if (runDir && fs.existsSync(runDir)) return runDir;
+  }
+  return startNewFlowReportRun(baseDir);
+}
+
+export function getCurrentFlowReportPaths(baseDir = DEFAULT_FLOW_REPORT_BASE): {
+  runDir: string;
+  statePath: string;
+  htmlPath: string;
+} | null {
+  const pointer = currentRunPointerPath(baseDir);
+  if (!fs.existsSync(pointer)) return null;
+  const runDir = fs.readFileSync(pointer, 'utf8').trim();
+  if (!runDir || !fs.existsSync(runDir)) return null;
+  const runId = path.basename(runDir);
+  return {
+    runDir,
+    statePath: path.join(runDir, 'report-state.json'),
+    htmlPath: path.join(runDir, `${runId}.html`),
+  };
 }
 
 export class HtmlStepReport {
-  private readonly reportDir: string;
-  private readonly htmlFileName: string;
-  private readonly stateFilePath: string;
+  private reportDir: string;
+  private htmlFileName: string;
+  private stateFilePath: string;
   private readonly sectionName: string;
+  private readonly baseDir: string;
   private stepIndex = 0;
   private finalized = false;
 
-  constructor(baseDir = 'test-results', sectionName = 'General') {
-    this.reportDir = path.join(baseDir, 'flow-report-shared');
-    this.htmlFileName = 'flow-report.html';
-    this.stateFilePath = path.join(this.reportDir, 'report-state.json');
+  constructor(sectionName: string, baseDir = DEFAULT_FLOW_REPORT_BASE) {
+    this.baseDir = baseDir;
     this.sectionName = sectionName;
-    fs.mkdirSync(this.reportDir, { recursive: true });
+    this.bindRunDirectory(resolveFlowReportRunDir(baseDir));
     this.ensureState();
   }
 
@@ -41,8 +100,11 @@ export class HtmlStepReport {
     return path.join(this.reportDir, this.htmlFileName);
   }
 
+  /** Begin a fresh dated report run (call from login / first section). */
   reset(): void {
     this.stepIndex = 0;
+    this.finalized = false;
+    this.bindRunDirectory(startNewFlowReportRun(this.baseDir));
     const initial: ReportState = {
       generatedAtIso: new Date().toISOString(),
       sections: {},
@@ -207,13 +269,28 @@ export class HtmlStepReport {
 </body>
 </html>`;
 
-    fs.writeFileSync(path.join(this.reportDir, this.htmlFileName), html, 'utf8');
-    console.log(`\nCustom HTML report written: ${path.join(this.reportDir, this.htmlFileName)}`);
+    const htmlPath = path.join(this.reportDir, this.htmlFileName);
+    fs.writeFileSync(htmlPath, html, 'utf8');
+    console.log(`\nCustom HTML report written: ${htmlPath}`);
+  }
+
+  private bindRunDirectory(runDir: string): void {
+    this.reportDir = runDir;
+    const runId = path.basename(runDir);
+    this.htmlFileName = `${runId}.html`;
+    this.stateFilePath = path.join(runDir, 'report-state.json');
+    fs.mkdirSync(runDir, { recursive: true });
   }
 
   private ensureState(): void {
     if (fs.existsSync(this.stateFilePath)) return;
-    this.reset();
+    const initial: ReportState = {
+      generatedAtIso: new Date().toISOString(),
+      sections: {},
+      steps: [],
+      overall: 'incomplete',
+    };
+    fs.writeFileSync(this.stateFilePath, JSON.stringify(initial, null, 2), 'utf8');
   }
 
   private readState(): ReportState {

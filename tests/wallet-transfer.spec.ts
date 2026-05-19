@@ -7,7 +7,7 @@ import { HtmlStepReport } from '../utils/html-step-report';
 test('open Wallet Transfer section', async ({ page }) => {
   test.setTimeout(90000);
 
-  const report = new HtmlStepReport('test-results', 'Wallet Transfer');
+  const report = new HtmlStepReport('Wallet Transfer');
   const loginPage = new MyPortalLoginPage(page);
   const walletTransferPage = new WalletTransferPage(page);
   const username = process.env.MYPORTAL_USERNAME;
