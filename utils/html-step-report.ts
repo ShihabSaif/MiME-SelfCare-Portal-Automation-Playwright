@@ -167,6 +167,7 @@ export class HtmlStepReport {
       'Inventory',
       'Complains',
       'My Profile',
+      'My Profile V2',
     ];
 
     const sectionRows = orderedSections

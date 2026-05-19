@@ -7,11 +7,12 @@ const authFile = 'playwright/.auth/user.json';
 const desktopChrome = { ...devices['Desktop Chrome'] };
 
 /**
- * Run a single section spec without login or other suite projects.
+ * Run a single section spec without other suite projects.
  * Requires a saved session at playwright/.auth/user.json (run login once first).
  *
- * Example:
- *   npx playwright test tests/my-profile.spec.ts -c playwright.isolated.config.ts --workers=1 --headed
+ * Examples:
+ *   npx playwright test tests/my-profile.spec.ts -c playwright.isolated.config.ts --project=my-profile-only --workers=1 --headed
+ *   npx playwright test tests/my-profile-v2.spec.ts -c playwright.isolated.config.ts --project=my-profile-v2-only --workers=1 --headed
  */
 export default defineConfig({
   testDir: './tests',
@@ -27,6 +28,11 @@ export default defineConfig({
     {
       name: 'my-profile-only',
       testMatch: /my-profile\.spec\.ts/,
+      use: { ...desktopChrome, storageState: authFile },
+    },
+    {
+      name: 'my-profile-v2-only',
+      testMatch: /my-profile-v2\.spec\.ts/,
       use: { ...desktopChrome, storageState: authFile },
     },
   ],

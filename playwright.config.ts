@@ -92,6 +92,13 @@ export default defineConfig({
       use: { ...desktopChrome, storageState: authFile },
       dependencies: ['login'],
     },
+    {
+      name: 'my-profile-v2',
+      testMatch: /my-profile-v2\.spec\.ts/,
+      use: { ...desktopChrome, storageState: authFile },
+      /* Depends on login only so `playwright test tests/my-profile-v2.spec.ts` does not run my-profile. */
+      dependencies: ['login'],
+    },
 
     /* Test against mobile viewports. */
     // {
