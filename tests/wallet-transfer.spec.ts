@@ -22,7 +22,7 @@ test('open Wallet Transfer section', async ({ page }) => {
     await page.goto(process.env.MYPORTAL_URL || 'https://mctest-myportal.mimebd.com/', {
       waitUntil: 'domcontentloaded',
     });
-    await report.addStep(page, 'Wallet Transfer landing page');
+    // await report.addStep(page, 'Wallet Transfer landing page');
     await loginPage.loginIfNeeded(username, password);
     await page.waitForLoadState('domcontentloaded').catch(() => undefined);
 
