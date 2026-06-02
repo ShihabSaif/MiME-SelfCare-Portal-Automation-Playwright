@@ -22,14 +22,14 @@ test('open Inventory section', async ({ page }) => {
     await page.goto(process.env.MYPORTAL_URL || 'https://mctest-myportal.mimebd.com/', {
       waitUntil: 'domcontentloaded',
     });
-    await report.addStep(page, 'Inventory landing page');
+    // await report.addStep(page, 'Inventory landing page');
     await loginPage.loginIfNeeded(username, password);
     await page.waitForLoadState('networkidle').catch(() => undefined);
 
     await inventoryPage.openInventory();
     await report.addStep(page, 'Inventory tab clicked');
     await inventoryPage.expectInventoryVisible();
-    await report.addStep(page, 'Inventory section visible', 'success');
+    // await report.addStep(page, 'Inventory section visible', 'success');
     overall = 'passed';
   } catch (error) {
     overall = 'failed';
