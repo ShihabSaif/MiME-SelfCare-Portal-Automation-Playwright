@@ -1,7 +1,18 @@
-import { type Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { screenshotAfterSettle, waitForPageSettled } from '../utils/page-settle';
+import { silentScreenshot } from '../utils/screenshot';
+
+const RECEIPT_LOADER_SELECTORS = [
+  '.spinner-border',
+  '.spinner-grow',
+  '.vld-overlay',
+  '[class*="loading-overlay"]',
+  '.pace-active',
+  '.v-progress-circular',
+  '[class*="page-loader"]',
+];
 
 export class PaymentHistoryPage {
   constructor(private readonly page: Page) {}
@@ -52,32 +63,42 @@ export class PaymentHistoryPage {
     return screenshotAfterSettle(this.page, { requireAppCard: true, settleMs: 300 });
   }
 
+  /** After Receipt click: wait until in-page spinners / blocking loaders are gone. */
+  async waitForReceiptDownloadLoaderGone(timeoutMs = 30_000): Promise<void> {
+    await expect
+      .poll(
+        async () => {
+          for (const selector of RECEIPT_LOADER_SELECTORS) {
+            const loader = this.page.locator(selector).first();
+            if (await loader.isVisible().catch(() => false)) return false;
+          }
+          return true;
+        },
+        { timeout: timeoutMs, intervals: [200, 400, 600] },
+      )
+      .toBeTruthy();
+  }
+
   /**
-   * Clicks the first "Receipt" button in the payment history table.
-   * Captures a screenshot immediately after the click (while the browser
-   * download bar is still visible), saves the downloaded file to `saveDir`,
-   * and returns both the screenshot buffer and the saved file path.
-   *
-   * Confirmed button selector from live DOM:
-   *   div.content-body .card.mb-0 table tbody td button.btn-primary — text "Receipt"
+   * Clicks the first "Receipt" button, waits for loaders to clear and the PDF
+   * download to start, screenshots while the browser save/download UI is visible,
+   * then saves the file under `saveDir`.
    */
   async clickReceiptAndSave(saveDir: string): Promise<{ screenshot?: Buffer; savedPath: string }> {
-    // Use getByRole for reliable matching regardless of CSS class structure
-    const receiptBtn = this.page
-      .getByRole('button', { name: /receipt/i })
-      .first();
+    const receiptBtn = this.page.getByRole('button', { name: /receipt/i }).first();
 
     await receiptBtn.waitFor({ state: 'visible', timeout: 10000 });
     await receiptBtn.scrollIntoViewIfNeeded();
 
-    // Set up download listener BEFORE clicking
-    const downloadPromise = this.page.waitForEvent('download', { timeout: 15000 });
+    const downloadPromise = this.page.waitForEvent('download', { timeout: 30_000 });
     await receiptBtn.click();
 
-    await waitForPageSettled(this.page, { settleMs: 400 });
-    const screenshot = await screenshotAfterSettle(this.page, { settleMs: 200 });
+    const [download] = await Promise.all([downloadPromise, this.waitForReceiptDownloadLoaderGone()]);
 
-    const download = await downloadPromise;
+    // Brief pause so Chrome’s download / save bar is visible in the capture.
+    await this.page.waitForTimeout(700);
+    const screenshot = await silentScreenshot(this.page);
+
     const filename = download.suggestedFilename() || `receipt-${Date.now()}.pdf`;
     fs.mkdirSync(saveDir, { recursive: true });
     const savedPath = path.join(saveDir, filename);
