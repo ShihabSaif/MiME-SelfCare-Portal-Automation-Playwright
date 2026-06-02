@@ -27,9 +27,9 @@ test('click recharge wallet using stored login token', async ({ page }, testInfo
     await page.goto(process.env.MYPORTAL_URL || 'https://mctest-myportal.mimebd.com/', {
       waitUntil: 'domcontentloaded',
     });
-    await report.addStepWithBuffer(await silentScreenshot(page) ?? null, page, 'Landing page');
+    // await report.addStepWithBuffer(await silentScreenshot(page) ?? null, page, 'Landing page');
     await page.waitForLoadState('networkidle').catch(() => undefined);
-    await report.addStepWithBuffer(await silentScreenshot(page) ?? null, page, 'After login');
+    // await report.addStepWithBuffer(await silentScreenshot(page) ?? null, page, 'After login');
 
     // ── Recharge flow — failures are captured and recorded but do NOT stop
     // ── the test; Check Balance always runs afterwards.
