@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { waitForPageSettled } from '../utils/page-settle';
 
 export class InventoryPage {
   constructor(private readonly page: Page) {}
@@ -14,14 +15,14 @@ export class InventoryPage {
   }
 
   async openInventory(): Promise<void> {
-    await this.page.waitForLoadState('networkidle').catch(() => undefined);
+    await waitForPageSettled(this.page);
     const link = await this.firstVisible([
       this.page.getByRole('link', { name: /^inventory$/i }),
       this.page.locator('a[href="/inventory"]'),
       this.page.locator('a:has-text("Inventory")'),
     ]);
     await link.click();
-    await this.page.waitForLoadState('networkidle').catch(() => undefined);
+    await waitForPageSettled(this.page);
   }
 
   async expectInventoryVisible(): Promise<void> {

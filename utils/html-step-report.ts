@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
+import { waitForPageSettled } from './page-settle';
 import { silentScreenshot } from './screenshot';
 
 export type StepStatus = 'success' | 'failed' | 'neutral';
@@ -135,6 +136,7 @@ export class HtmlStepReport {
     if (screenshotBuffer) {
       fs.writeFileSync(imagePath, screenshotBuffer);
     } else {
+      await waitForPageSettled(page);
       const buf = await silentScreenshot(page);
       if (buf) fs.writeFileSync(imagePath, buf);
     }

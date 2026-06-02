@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
+import { screenshotAfterSettle, waitForPageSettled } from '../utils/page-settle';
 import { silentScreenshot } from '../utils/screenshot';
 
 export class ServicesPage {
@@ -22,7 +23,7 @@ export class ServicesPage {
   }
 
   private async servicesTab(): Promise<Locator> {
-    await this.page.waitForLoadState('networkidle').catch(() => undefined);
+    await waitForPageSettled(this.page);
     return this.firstVisible([
       this.page.getByRole('link', { name: /^services$/i }),
       this.page.getByRole('tab', { name: /services/i }),
@@ -35,7 +36,7 @@ export class ServicesPage {
   async openServices(): Promise<void> {
     const tab = await this.servicesTab();
     await tab.click();
-    await this.page.waitForLoadState('networkidle').catch(() => undefined);
+    await waitForPageSettled(this.page);
   }
 
   async expectServicesVisible(): Promise<void> {
@@ -57,8 +58,7 @@ export class ServicesPage {
     ]);
 
     await tab.click();
-    await this.page.waitForLoadState('networkidle').catch(() => undefined);
-    await this.page.waitForTimeout(this.settleMs);
+    await waitForPageSettled(this.page);
   }
 
   async expectCategoryActivated(categoryName: string): Promise<void> {
@@ -120,7 +120,7 @@ export class ServicesPage {
   async expectConfirmResendModalVisible(): Promise<Locator> {
     const d = this.confirmResendDialog();
     await expect(d).toBeVisible({ timeout: 20000 });
-    await this.page.waitForTimeout(300);
+    await waitForPageSettled(this.page, { settleMs: 300 });
     return d;
   }
 
@@ -203,7 +203,7 @@ export class ServicesPage {
   async expectTopModalVisible(): Promise<Locator> {
     const dialog = this.page.getByRole('dialog').filter({ visible: true }).last();
     await expect(dialog).toBeVisible({ timeout: 20000 });
-    await this.page.waitForTimeout(350);
+    await waitForPageSettled(this.page, { settleMs: 300 });
     return dialog;
   }
 
@@ -220,7 +220,7 @@ export class ServicesPage {
   async expectGraphBandwidthModalVisible(): Promise<Locator> {
     const modal = this.graphBandwidthModal();
     await expect(modal).toBeVisible({ timeout: 20000 });
-    await this.page.waitForTimeout(350);
+    await waitForPageSettled(this.page, { settleMs: 300 });
     return modal;
   }
 
@@ -266,7 +266,7 @@ export class ServicesPage {
     await expect(target).toBeVisible({ timeout: 20000 });
     await target.scrollIntoViewIfNeeded();
     await target.click();
-    await this.page.waitForTimeout(this.settleMs);
+    await waitForPageSettled(this.page, { settleMs: 350 });
   }
 
   /** Bulk Onboard modal — accessible name is "Bulk Onboarding". */
@@ -280,7 +280,7 @@ export class ServicesPage {
   async expectBulkOnboardModalVisible(): Promise<Locator> {
     const modal = this.bulkOnboardModal();
     await expect(modal).toBeVisible({ timeout: 20000 });
-    await this.page.waitForTimeout(350);
+    await waitForPageSettled(this.page, { settleMs: 300 });
     return modal;
   }
 
@@ -345,8 +345,8 @@ export class ServicesPage {
     }
 
     // Brief pause for the modal UI to show the chosen filename, then capture immediately.
-    await this.page.waitForTimeout(300);
-    return silentScreenshot(this.page);
+    await waitForPageSettled(this.page, { settleMs: 300 });
+    return screenshotAfterSettle(this.page, { settleMs: 300 });
   }
 
   /**
@@ -359,7 +359,7 @@ export class ServicesPage {
     await expect(upload).toBeEnabled({ timeout: 15000 });
     await upload.scrollIntoViewIfNeeded();
     await upload.click();
-
+    await waitForPageSettled(this.page, { settleMs: 350 });
     return silentScreenshot(this.page);
   }
 

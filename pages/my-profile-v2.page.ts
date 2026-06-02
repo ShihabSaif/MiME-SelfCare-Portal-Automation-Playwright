@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { silentScreenshot } from '../utils/screenshot';
+import { screenshotAfterSettle, waitForPageSettled } from '../utils/page-settle';
 
 export class MyProfileV2Page {
   constructor(private readonly page: Page) {}
@@ -42,8 +42,7 @@ export class MyProfileV2Page {
       .filter({ hasText: /^my profile$/i })
       .first()
       .click();
-    await this.page.waitForLoadState('domcontentloaded').catch(() => undefined);
-    await this.page.waitForTimeout(this.settleMs);
+    await waitForPageSettled(this.page);
   }
 
   async clickDropdownChangePassword(): Promise<void> {
@@ -52,14 +51,12 @@ export class MyProfileV2Page {
       .filter({ hasText: /^change password$/i })
       .first()
       .click();
-    await this.page.waitForLoadState('domcontentloaded').catch(() => undefined);
-    await this.page.waitForTimeout(this.settleMs);
+    await waitForPageSettled(this.page);
   }
 
   async expectProfileDetailsPage(): Promise<void> {
     await expect(this.page.locator('body')).toContainText(/details|profile/i, { timeout: 20000 });
-    await this.page.waitForLoadState('networkidle').catch(() => undefined);
-    await this.page.waitForTimeout(this.settleMs);
+    await waitForPageSettled(this.page);
   }
 
   async expectChangePasswordPage(): Promise<void> {
@@ -72,6 +69,6 @@ export class MyProfileV2Page {
   }
 
   async screenshot(): Promise<Buffer | undefined> {
-    return silentScreenshot(this.page);
+    return screenshotAfterSettle(this.page);
   }
 }

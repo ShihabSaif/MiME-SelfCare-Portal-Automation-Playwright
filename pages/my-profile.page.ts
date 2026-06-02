@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { captureAndReadToast, silentScreenshot, type ToastCapture } from '../utils/screenshot';
+import { screenshotAfterSettle, waitForPageSettled } from '../utils/page-settle';
+import { captureAndReadToast, type ToastCapture } from '../utils/screenshot';
 
 type ChangePasswordField = 'Old Password' | 'New Password' | 'Confirm Password';
 
@@ -44,8 +45,7 @@ export class MyProfilePage {
     const item = this.menuTitle(tabName);
     await item.waitFor({ state: 'visible', timeout: 5000 });
     await item.click();
-    await this.page.waitForLoadState('domcontentloaded').catch(() => undefined);
-    await this.page.waitForTimeout(300);
+    await waitForPageSettled(this.page);
   }
 
   async openDetails(): Promise<void> {
@@ -54,8 +54,7 @@ export class MyProfilePage {
 
   async expectDetailsVisible(): Promise<void> {
     await expect(this.page.locator('body')).toContainText(/details|profile/i, { timeout: 20000 });
-    await this.page.waitForLoadState('domcontentloaded').catch(() => undefined);
-    await this.page.waitForTimeout(1500);
+    await waitForPageSettled(this.page);
   }
 
   async openChangePassword(): Promise<void> {
@@ -66,8 +65,7 @@ export class MyProfilePage {
     await expect(this.page.locator('body')).toContainText(/change password|new password|current password/i, {
       timeout: 20000,
     });
-    await this.page.waitForLoadState('domcontentloaded').catch(() => undefined);
-    await this.page.waitForTimeout(1500);
+    await waitForPageSettled(this.page);
   }
 
   /** Waits for the change-password form inputs (dynamic BVID ids). */
@@ -170,6 +168,6 @@ export class MyProfilePage {
   }
 
   async screenshotChangePasswordForm(): Promise<Buffer | undefined> {
-    return silentScreenshot(this.page);
+    return screenshotAfterSettle(this.page);
   }
 }

@@ -1,4 +1,5 @@
 import { type Locator, type Page } from '@playwright/test';
+import { screenshotAfterSettle, waitForPageSettled } from '../utils/page-settle';
 import { captureAndReadToast, silentScreenshot, type ToastCapture } from '../utils/screenshot';
 
 export type PaymentStatus = 'success' | 'failed' | 'unknown';
@@ -17,7 +18,7 @@ export class RechargeWalletPage {
   }
 
   private async walletsMenu(): Promise<Locator> {
-    await this.page.waitForLoadState('networkidle').catch(() => undefined);
+    await waitForPageSettled(this.page);
 
     const candidates = [
       this.page.getByRole('link', { name: /^wallets$/i }),
@@ -155,8 +156,7 @@ export class RechargeWalletPage {
 
     const rechargeLink = await this.rechargeWalletLink();
     await rechargeLink.click();
-    await this.page.waitForLoadState('networkidle').catch(() => undefined);
-    await this.page.waitForTimeout(this.visualDelayMs);
+    await waitForPageSettled(this.page);
     return captureAndReadToast(this.page);
   }
 
@@ -302,7 +302,6 @@ export class RechargeWalletPage {
     ]);
 
     await toggle.click();
-    await this.page.waitForTimeout(this.visualDelayMs);
-    return (await silentScreenshot(this.page)) ?? null;
+    return (await screenshotAfterSettle(this.page)) ?? null;
   }
 }

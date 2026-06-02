@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { waitForPageSettled } from './page-settle';
 
 /**
  * Takes a screenshot silently via CDP (Page.captureScreenshot) without any
@@ -73,6 +74,7 @@ export async function captureAndReadToast(
     }
   } catch {
     // No toast appeared within the window
+    await waitForPageSettled(page);
     return { status: 'none', message: '', screenshot: await silentScreenshot(page) };
   }
 

@@ -24,11 +24,15 @@ test('open Payment History section', async ({ page }) => {
     });
     await report.addStep(page, 'Payment History landing page');
     await loginPage.loginIfNeeded(username, password);
-    await page.waitForLoadState('networkidle').catch(() => undefined);
+    await page.waitForLoadState('domcontentloaded').catch(() => undefined);
 
-    // openPaymentHistory() waits for full page render before returning
     await paymentHistoryPage.openPaymentHistory();
-    await report.addStep(page, 'Payment History page loaded', 'success');
+    await report.addStepWithBuffer(
+      (await paymentHistoryPage.screenshotLoadedPage()) ?? null,
+      page,
+      'Payment History page loaded',
+      'success',
+    );
 
     const saveDir = 'test-results/downloads/payment-history';
     const { screenshot: receiptShot, savedPath } = await paymentHistoryPage.clickReceiptAndSave(saveDir);

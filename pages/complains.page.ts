@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { waitForPageSettled } from '../utils/page-settle';
 
 export class ComplainsPage {
   constructor(private readonly page: Page) {}
@@ -14,14 +15,14 @@ export class ComplainsPage {
   }
 
   async openComplains(): Promise<void> {
-    await this.page.waitForLoadState('networkidle').catch(() => undefined);
+    await waitForPageSettled(this.page);
     const link = await this.firstVisible([
       this.page.getByRole('link', { name: /complains?/i }),
       this.page.locator('a[href="/customer/complains"]'),
       this.page.locator('a:has-text("Complains")'),
     ]);
     await link.click();
-    await this.page.waitForLoadState('networkidle').catch(() => undefined);
+    await waitForPageSettled(this.page);
   }
 
   async expectComplainsVisible(): Promise<void> {
@@ -291,7 +292,7 @@ export class ComplainsPage {
   }
 
   async expectBackToComplainsList(): Promise<void> {
-    await this.page.waitForLoadState('networkidle').catch(() => undefined);
+    await waitForPageSettled(this.page);
     await this.expectComplainsVisible();
   }
 }

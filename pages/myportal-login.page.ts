@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import fs from 'node:fs';
+import { waitForPageSettled } from '../utils/page-settle';
 import { silentScreenshot } from '../utils/screenshot';
 
 export class MyPortalLoginPage {
@@ -67,15 +68,13 @@ export class MyPortalLoginPage {
     }
     await this.runStep('goto_login_url', async () => {
       await this.page.goto(this.loginUrl!, { waitUntil: 'domcontentloaded' });
-      await this.page.waitForLoadState('networkidle').catch(() => undefined);
       await this.page.waitForTimeout(500);
     });
   }
 
-  async login(username: string, password: string): Promise<void> {
+  async fillCredentials(username: string, password: string): Promise<void> {
     const usernameInput = await this.runStep('resolve_username_input', async () => this.usernameInput());
     const passwordInput = await this.runStep('resolve_password_input', async () => this.passwordInput());
-    const loginButton = await this.runStep('resolve_login_button', async () => this.loginButton());
 
     await this.runStep('fill_username', async () => {
       await usernameInput.fill(username);
@@ -83,13 +82,29 @@ export class MyPortalLoginPage {
     await this.runStep('fill_password', async () => {
       await passwordInput.fill(password);
     });
+  }
 
+  /** Brief pause after fill, then screenshot of the populated login form (before submit). */
+  async captureFilledCredentialsForm(waitMs = 800): Promise<Buffer | undefined> {
+    await this.page.waitForTimeout(waitMs);
+    return silentScreenshot(this.page);
+  }
+
+  async submitCredentials(): Promise<void> {
+    const loginButton = await this.runStep('resolve_login_button', async () => this.loginButton());
     await this.runStep('click_login', async () => {
-      await Promise.all([
-        this.page.waitForLoadState('networkidle').catch(() => undefined),
-        loginButton.click(),
-      ]);
+      await loginButton.click();
     });
+  }
+
+  async waitForDashboardAfterLogin(): Promise<void> {
+    await waitForPageSettled(this.page, { requireAppCard: true, timeoutMs: 15000 });
+  }
+
+  async login(username: string, password: string): Promise<void> {
+    await this.fillCredentials(username, password);
+    await this.submitCredentials();
+    await this.waitForDashboardAfterLogin();
   }
 
   async loginIfNeeded(username: string, password: string): Promise<void> {

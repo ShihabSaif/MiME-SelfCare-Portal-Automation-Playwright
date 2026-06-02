@@ -35,5 +35,10 @@ export default defineConfig({
       testMatch: /my-profile-v2\.spec\.ts/,
       use: { ...desktopChrome, storageState: authFile },
     },
+    {
+      name: 'wallet-transfer-only',
+      testMatch: /wallet-transfer\.spec\.ts/,
+      use: { ...desktopChrome, storageState: authFile },
+    },
   ],
 });

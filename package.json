@@ -12,7 +12,8 @@
     "test:recharge": "playwright test tests/recharge-wallet.spec.ts --project=recharge-wallet --workers=1 --headed",
     "test:my-profile": "playwright test tests/my-profile.spec.ts -c playwright.isolated.config.ts --workers=1 --headed",
     "test:my-profile-v2": "playwright test tests/my-profile-v2.spec.ts -c playwright.isolated.config.ts --project=my-profile-v2-only --workers=1 --headed",
-    "test:my-profile-v2:with-login": "playwright test tests/my-profile-v2.spec.ts --project=my-profile-v2 --workers=1 --headed"
+    "test:my-profile-v2:with-login": "playwright test tests/my-profile-v2.spec.ts --project=my-profile-v2 --workers=1 --headed",
+    "test:wallet-transfer": "playwright test tests/wallet-transfer.spec.ts -c playwright.isolated.config.ts --project=wallet-transfer-only --workers=1 --headed"
   },
   "keywords": [],
   "author": "",

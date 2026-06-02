@@ -24,13 +24,20 @@ test('open Wallet Transfer section', async ({ page }) => {
     });
     await report.addStep(page, 'Wallet Transfer landing page');
     await loginPage.loginIfNeeded(username, password);
-    await page.waitForLoadState('networkidle').catch(() => undefined);
+    await page.waitForLoadState('domcontentloaded').catch(() => undefined);
 
     await walletTransferPage.openWalletTransfer();
-    await report.addStep(page, 'Wallet Transfer tab clicked');
-    await walletTransferPage.expectWalletTransferVisible();
-    await report.addStep(page, 'Wallet Transfer section visible', 'success');
+    await walletTransferPage.waitForWalletTransferPageLoaded();
+    await report.addStepWithBuffer(
+      (await walletTransferPage.screenshot()) ?? null,
+      page,
+      'Wallet Transfer page loaded',
+      'success',
+    );
+    await walletTransferPage.pauseAfterScreenshot();
+
     overall = 'passed';
+    return;
   } catch (error) {
     overall = 'failed';
     logFlowFailure('Wallet Transfer', error);
