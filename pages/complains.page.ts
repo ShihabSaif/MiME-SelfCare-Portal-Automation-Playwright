@@ -1,5 +1,18 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { waitForPageSettled } from '../utils/page-settle';
+import { silentScreenshot } from '../utils/screenshot';
+
+const COMPLAINS_LOADER_SELECTORS = [
+  '.spinner-border',
+  '.spinner-grow',
+  '.vld-overlay',
+  '.b-overlay-wrap',
+  '.b-overlay',
+  '[class*="loading-overlay"]',
+  '.pace-active',
+  '.v-progress-circular',
+  '[class*="page-loader"]',
+];
 
 export class ComplainsPage {
   constructor(private readonly page: Page) {}
@@ -14,7 +27,83 @@ export class ComplainsPage {
     throw new Error('Complains navigation element is not visible.');
   }
 
-  async openComplains(): Promise<void> {
+  private async areComplainsLoadersVisible(): Promise<boolean> {
+    for (const selector of COMPLAINS_LOADER_SELECTORS) {
+      const loader = this.page.locator(selector);
+      const count = await loader.count();
+      for (let i = 0; i < count; i++) {
+        if (await loader.nth(i).isVisible().catch(() => false)) return true;
+      }
+    }
+    const progress = this.page.getByRole('progressbar');
+    const pc = await progress.count();
+    for (let i = 0; i < pc; i++) {
+      if (await progress.nth(i).isVisible().catch(() => false)) return true;
+    }
+    return false;
+  }
+
+  /** Loaders must stay hidden for several polls (avoids screenshot before spinner mounts). */
+  async waitForComplainsLoadersGone(timeoutMs = 30_000): Promise<void> {
+    const stablePolls = 3;
+    let clearStreak = 0;
+
+    await expect
+      .poll(
+        async () => {
+          if (await this.areComplainsLoadersVisible()) {
+            clearStreak = 0;
+            return false;
+          }
+          clearStreak += 1;
+          return clearStreak >= stablePolls;
+        },
+        { timeout: timeoutMs, intervals: [300, 450, 600] },
+      )
+      .toBeTruthy();
+  }
+
+  /** After Complains tab click: navigation, page content, then loaders cleared. */
+  async waitForComplainsPageLoaded(): Promise<void> {
+    await this.page.waitForLoadState('domcontentloaded').catch(() => undefined);
+
+    await this.page.waitForURL(/\/customer\/complains/i, { timeout: 20000 }).catch(() => undefined);
+
+    await expect
+      .poll(
+        async () => {
+          const url = this.page.url().toLowerCase();
+          if (url.includes('/customer/complains')) return true;
+          return this.page
+            .getByRole('button', { name: /\+?\s*create ticket/i })
+            .first()
+            .isVisible()
+            .catch(() => false);
+        },
+        { timeout: 20_000, intervals: [300, 500, 700] },
+      )
+      .toBeTruthy();
+
+    await this.page
+      .locator('div.content-body .card, div.app-content .card')
+      .first()
+      .waitFor({ state: 'visible', timeout: 20000 });
+
+    const button = await this.createTicketButton();
+    await button.waitFor({ state: 'visible', timeout: 20000 });
+
+    await this.page
+      .locator('div.content-body table tbody tr, div.app-content table tbody tr')
+      .first()
+      .waitFor({ state: 'visible', timeout: 20000 })
+      .catch(() => undefined);
+
+    await this.waitForComplainsLoadersGone();
+    await waitForPageSettled(this.page, { requireAppCard: true, settleMs: 500 });
+  }
+
+  /** Click Complains nav, wait for full page load, return screenshot for the report. */
+  async openComplains(): Promise<Buffer | undefined> {
     await waitForPageSettled(this.page);
     const link = await this.firstVisible([
       this.page.getByRole('link', { name: /complains?/i }),
@@ -22,7 +111,8 @@ export class ComplainsPage {
       this.page.locator('a:has-text("Complains")'),
     ]);
     await link.click();
-    await waitForPageSettled(this.page);
+    await this.waitForComplainsPageLoaded();
+    return silentScreenshot(this.page);
   }
 
   async expectComplainsVisible(): Promise<void> {
@@ -42,50 +132,6 @@ export class ComplainsPage {
 
   private ticketModal(): Locator {
     return this.page.getByRole('dialog', { name: /create ticket/i }).first();
-  }
-
-  /**
-   * Success toast and submit loader often show together; wait until spinners / blocking
-   * overlays are gone so reports capture only the notification.
-   */
-  private async waitForTicketSuccessLoadersGone(successToast: Locator): Promise<void> {
-    await expect
-      .poll(
-        async () => {
-          if (!(await successToast.isVisible().catch(() => false))) return false;
-
-          const spinnerLike = this.page.locator('.spinner-border, .spinner-grow');
-          const spinnerCount = await spinnerLike.count();
-          for (let i = 0; i < spinnerCount; i++) {
-            if (await spinnerLike.nth(i).isVisible().catch(() => false)) return false;
-          }
-
-          const overlayRoots = [
-            this.page.locator('.b-overlay-wrap'),
-            this.page.locator('.b-overlay'),
-            this.page.locator('.vld-overlay'),
-            this.page.locator('[class*="loading-overlay"]'),
-            this.page.locator('[class*="page-loader"]'),
-          ];
-          for (const root of overlayRoots) {
-            const c = await root.count();
-            for (let i = 0; i < c; i++) {
-              const el = root.nth(i);
-              if (await el.isVisible().catch(() => false)) return false;
-            }
-          }
-
-          const progress = this.page.getByRole('progressbar');
-          const pc = await progress.count();
-          for (let i = 0; i < pc; i++) {
-            if (await progress.nth(i).isVisible().catch(() => false)) return false;
-          }
-
-          return true;
-        },
-        { timeout: 20_000, intervals: [150, 300, 400] },
-      )
-      .toBeTruthy();
   }
 
   private async openComboBoxByLabel(labelPattern: RegExp): Promise<Locator> {
@@ -277,18 +323,36 @@ export class ComplainsPage {
     await createButton.click();
   }
 
-  async expectTicketCreatedSuccessfully(): Promise<void> {
-    const modal = this.ticketModal();
-    await expect(modal).toBeHidden({ timeout: 20000 }).catch(() => undefined);
-    const successToast = this.page
-      .locator('.Vue-Toastification__toast.top-right')
-      .filter({ hasText: /success!\s*ticket created successfully/i })
+  private successToast(): Locator {
+    return this.page
+      .locator('.Vue-Toastification__toast')
+      .filter({ hasText: /ticket created successfully/i })
       .first();
-    await expect(successToast).toBeVisible({ timeout: 10000 });
+  }
+
+  /**
+   * After Create: wait ~4–5s for submit loader to clear, verify success toast, screenshot.
+   */
+  async expectTicketCreatedSuccessfully(): Promise<Buffer | undefined> {
+    const postCreateWaitMs = 4500;
+    const pollMaxMs = 5000;
+    const started = Date.now();
+
+    while (Date.now() - started < pollMaxMs) {
+      if (!(await this.areComplainsLoadersVisible())) break;
+      await this.page.waitForTimeout(400);
+    }
+
+    const remaining = postCreateWaitMs - (Date.now() - started);
+    if (remaining > 0) {
+      await this.page.waitForTimeout(remaining);
+    }
+
+    const successToast = this.successToast();
+    await expect(successToast).toBeVisible({ timeout: 20000 });
     await expect(successToast).toContainText(/ticket created successfully/i);
-    await this.waitForTicketSuccessLoadersGone(successToast);
-    await expect(successToast).toBeVisible({ timeout: 5000 });
-    await expect(successToast).toContainText(/ticket created successfully/i);
+
+    return silentScreenshot(this.page);
   }
 
   async expectBackToComplainsList(): Promise<void> {

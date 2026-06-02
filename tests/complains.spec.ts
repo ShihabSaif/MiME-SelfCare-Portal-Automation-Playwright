@@ -22,14 +22,14 @@ test('open Complains section', async ({ page }) => {
     await page.goto(process.env.MYPORTAL_URL || 'https://mctest-myportal.mimebd.com/', {
       waitUntil: 'domcontentloaded',
     });
-    await report.addStep(page, 'Complains landing page');
+    // await report.addStep(page, 'Complains landing page');
     await loginPage.loginIfNeeded(username, password);
     await page.waitForLoadState('networkidle').catch(() => undefined);
 
-    await complainsPage.openComplains();
-    await report.addStep(page, 'Complains tab clicked');
+    const complainsTabShot = await complainsPage.openComplains();
+    await report.addStepWithBuffer(complainsTabShot ?? null, page, 'Complains tab clicked', 'success');
     await complainsPage.expectComplainsVisible();
-    await report.addStep(page, 'Complains section visible', 'success');
+    // await report.addStep(page, 'Complains section visible', 'success');
 
     await complainsPage.openCreateTicketModal();
     await report.addStep(page, 'Create Ticket modal opened first time', 'success');
@@ -65,8 +65,13 @@ test('open Complains section', async ({ page }) => {
       await report.addStep(page, 'First Service Line option selected for Create', 'success');
 
       await complainsPage.clickCreateTicket();
-      await complainsPage.expectTicketCreatedSuccessfully();
-      await report.addStep(page, 'Ticket created success popup verified (screenshot after loader gone)', 'success');
+      const ticketSuccessShot = await complainsPage.expectTicketCreatedSuccessfully();
+      // await report.addStepWithBuffer(
+      //   ticketSuccessShot ?? null,
+      //   page,
+      //   'Ticket created success popup verified',
+      //   'success',
+      // );
       await complainsPage.expectBackToComplainsList();
       await report.addStep(page, 'Ticket created and back to Complains list', 'success');
     } catch (ticketError) {
