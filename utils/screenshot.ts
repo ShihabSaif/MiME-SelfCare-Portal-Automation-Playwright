@@ -32,7 +32,8 @@ export interface ToastCapture {
 }
 
 const TOAST_SELECTOR = [
-  '#b-toaster-top-right .toast',  // Bootstrap-Vue (main portal)
+  '.Vue-Toastification__toast',
+  '#b-toaster-top-right .toast',
   '.alert-danger',
   '.alert-success',
   '[role="alert"]',
@@ -79,6 +80,28 @@ export async function captureAndReadToast(
   }
 
   const screenshot = await silentScreenshot(page);
+
+  // ── Vue-Toastification ───────────────────────────────────────────────────
+  const vueToasts = page.locator('.Vue-Toastification__toast').filter({ visible: true });
+  const vueCount = await vueToasts.count().catch(() => 0);
+  for (let i = 0; i < vueCount; i++) {
+    const toast = vueToasts.nth(i);
+    const message = (await toast.innerText().catch(() => '')).trim().replace(/\s+/g, ' ');
+    if (!message) continue;
+    const cls = (await toast.getAttribute('class').catch(() => '')) ?? '';
+    const isError =
+      /Vue-Toastification__toast--error|toast-error|bg-danger|danger/i.test(cls) ||
+      /\b(error|failed|invalid|unable|wrong)\b/i.test(message);
+    const isSuccess =
+      /Vue-Toastification__toast--success|toast-success|bg-success|success/i.test(cls) ||
+      /\b(success|successful|password changed)\b/i.test(message);
+
+    if (isError) return { status: 'failed', message, screenshot };
+    if (isSuccess) return { status: 'success', message, screenshot };
+
+    const byText = classifyByText(message);
+    if (byText) return { status: byText, message, screenshot };
+  }
 
   // ── Bootstrap-Vue toasts ─────────────────────────────────────────────────
   const bvToasts = page.locator('#b-toaster-top-right .toast');
@@ -130,6 +153,8 @@ export async function captureAndReadToast(
 
 function classifyByText(text: string): 'success' | 'failed' | null {
   if (/\b(error|failed|failure|invalid|unable|unsuccessful|wrong|exception)\b/i.test(text)) return 'failed';
-  if (/\b(success|successful|completed|saved|uploaded|approved)\b/i.test(text)) return 'success';
+  if (/\b(success|successful|completed|saved|uploaded|approved|password changed)\b/i.test(text)) {
+    return 'success';
+  }
   return null;
 }

@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { screenshotAfterSettle, waitForPageSettled } from '../utils/page-settle';
-import { captureAndReadToast, type ToastCapture } from '../utils/screenshot';
+import { captureAndReadToast, silentScreenshot, type ToastCapture } from '../utils/screenshot';
 
 type ChangePasswordField = 'Old Password' | 'New Password' | 'Confirm Password';
 
@@ -163,8 +163,36 @@ export class MyProfilePage {
     await submit.click();
   }
 
+  private changePasswordFeedbackToast(): Locator {
+    return this.page.locator('.Vue-Toastification__toast, #b-toaster-top-right .toast');
+  }
+
+  /**
+   * Waits until the post-submit toast is visible, then screenshots with the toaster on screen.
+   */
   async waitForChangePasswordSubmitFeedback(): Promise<ToastCapture> {
-    return captureAndReadToast(this.page, 10000);
+    const toastRoot = this.changePasswordFeedbackToast();
+    const successToast = toastRoot.filter({ hasText: /password changed successfully/i }).first();
+
+    try {
+      await successToast.waitFor({ state: 'visible', timeout: 20000 });
+      const message = (await successToast.innerText().catch(() => '')).trim().replace(/\s+/g, ' ');
+      const screenshot = await silentScreenshot(this.page);
+      return {
+        status: 'success',
+        message: message || 'Success Password changed successfully!',
+        screenshot,
+      };
+    } catch {
+      const errorToast = toastRoot
+        .filter({ hasText: /\b(error|failed|invalid|unable|wrong)\b/i })
+        .first();
+      if (await errorToast.isVisible().catch(() => false)) {
+        const message = (await errorToast.innerText().catch(() => '')).trim().replace(/\s+/g, ' ');
+        return { status: 'failed', message, screenshot: await silentScreenshot(this.page) };
+      }
+      return captureAndReadToast(this.page, 10000);
+    }
   }
 
   async screenshotChangePasswordForm(): Promise<Buffer | undefined> {

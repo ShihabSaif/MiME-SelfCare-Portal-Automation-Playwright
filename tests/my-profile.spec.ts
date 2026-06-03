@@ -30,7 +30,7 @@ test('open My Profile section', async ({ page }) => {
     await myProfilePage.openMyProfile();
     await report.addStep(page, 'My Profile tab clicked');
     await myProfilePage.expectMyProfileVisible();
-    await report.addStep(page, 'My Profile section visible', 'success');
+    // await report.addStep(page, 'My Profile section visible', 'success');
 
     await myProfilePage.openDetails();
     await myProfilePage.expectDetailsVisible();
