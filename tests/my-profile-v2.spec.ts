@@ -22,7 +22,7 @@ test('navbar profile menu — My Profile and Change Password', async ({ page }) 
     await page.goto(process.env.MYPORTAL_URL || 'https://mctest-myportal.mimebd.com/', {
       waitUntil: 'domcontentloaded',
     });
-    await report.addStep(page, 'My Profile V2 landing page');
+    // await report.addStep(page, 'My Profile V2 landing page');
     await loginPage.loginIfNeeded(username, password);
     await page.waitForLoadState('networkidle').catch(() => undefined);
 
