@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
+import { logFlowFailure } from './flow-test';
 import { waitForPageSettled } from './page-settle';
-import { silentScreenshot } from './screenshot';
+import { anyToastVisible, silentScreenshot, waitForToastsGone, type ToastCapture } from './screenshot';
+import { toastStepTitle, toastToStepStatus, type ToastStepInput } from './toast-outcome';
 
 export type StepStatus = 'success' | 'failed' | 'neutral';
 
@@ -89,6 +91,7 @@ export class HtmlStepReport {
   private readonly baseDir: string;
   private stepIndex = 0;
   private finalized = false;
+  toastFailureRecorded = false;
 
   constructor(sectionName: string, baseDir = DEFAULT_FLOW_REPORT_BASE) {
     this.baseDir = baseDir;
@@ -117,6 +120,29 @@ export class HtmlStepReport {
 
   async addStep(page: Page, title: string, status: StepStatus = 'success'): Promise<void> {
     await this.addStepWithBuffer(null, page, title, status);
+  }
+
+  /** Step status + screenshot from success/error toaster (pass `defaultForNone` when no toast). */
+  async recordToastFeedback(
+    page: Page,
+    title: string,
+    feedback: ToastStepInput | ToastCapture,
+    options?: { defaultForNone?: StepStatus; includeMessageInTitle?: boolean },
+  ): Promise<void> {
+    const stepStatus = toastToStepStatus(feedback.status, options?.defaultForNone ?? 'neutral');
+    const stepTitle = toastStepTitle(title, feedback.message, options?.includeMessageInTitle !== false);
+    await this.addStepWithBuffer(feedback.screenshot ?? null, page, stepTitle, stepStatus);
+
+    if (feedback.status === 'failed') {
+      this.toastFailureRecorded = true;
+      logFlowFailure(this.sectionName, new Error(feedback.message?.trim() || title));
+    }
+
+    if (feedback.status === 'success' || feedback.status === 'failed') {
+      if (await anyToastVisible(page)) {
+        await waitForToastsGone(page, 4_000);
+      }
+    }
   }
 
   /**
@@ -156,7 +182,7 @@ export class HtmlStepReport {
     this.finalized = true;
 
     const state = this.readState();
-    state.sections[this.sectionName] = overall;
+    state.sections[this.sectionName] = this.toastFailureRecorded ? 'failed' : overall;
     state.overall = this.computeOverall(state.sections);
     this.writeState(state);
 

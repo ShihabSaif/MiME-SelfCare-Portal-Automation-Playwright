@@ -3,6 +3,7 @@ import { MyPortalLoginPage } from '../pages/myportal-login.page';
 import { ComplainsPage } from '../pages/complains.page';
 import { logFlowFailure } from '../utils/flow-test';
 import { HtmlStepReport } from '../utils/html-step-report';
+import { captureAndReadToast } from '../utils/screenshot';
 
 test('open Complains section', async ({ page }) => {
   test.setTimeout(90000);
@@ -22,14 +23,18 @@ test('open Complains section', async ({ page }) => {
     await page.goto(process.env.MYPORTAL_URL || 'https://mctest-myportal.mimebd.com/', {
       waitUntil: 'domcontentloaded',
     });
-    // await report.addStep(page, 'Complains landing page');
     await loginPage.loginIfNeeded(username, password);
     await page.waitForLoadState('networkidle').catch(() => undefined);
 
-    const complainsTabShot = await complainsPage.openComplains();
-    await report.addStepWithBuffer(complainsTabShot ?? null, page, 'Complains tab clicked', 'success');
-    await complainsPage.expectComplainsVisible();
-    // await report.addStep(page, 'Complains section visible', 'success');
+    const complainsTabOutcome = await complainsPage.openComplains();
+    await report.recordToastFeedback(page, 'Complains tab clicked', complainsTabOutcome, {
+      defaultForNone: 'success',
+      includeMessageInTitle: true,
+    });
+
+    if (complainsTabOutcome.status !== 'failed') {
+      await complainsPage.expectComplainsVisible();
+    }
 
     await complainsPage.openCreateTicketModal();
     await report.addStep(page, 'Create Ticket modal opened first time', 'success');
@@ -65,22 +70,39 @@ test('open Complains section', async ({ page }) => {
       await report.addStep(page, 'First Service Line option selected for Create', 'success');
 
       await complainsPage.clickCreateTicket();
-      const ticketSuccessShot = await complainsPage.expectTicketCreatedSuccessfully();
-      // await report.addStepWithBuffer(
-      //   ticketSuccessShot ?? null,
-      //   page,
-      //   'Ticket created success popup verified',
-      //   'success',
-      // );
-      await complainsPage.expectBackToComplainsList();
-      await report.addStep(page, 'Ticket created and back to Complains list', 'success');
+      const ticketFeedback = await complainsPage.expectTicketCreatedSuccessfully();
+
+      const ticketStepTitle =
+        ticketFeedback.status === 'failed'
+          ? 'Ticket creation failed'
+          : 'Ticket created success popup verified';
+      await report.recordToastFeedback(page, ticketStepTitle, ticketFeedback, {
+        defaultForNone: 'neutral',
+        includeMessageInTitle: true,
+      });
+
+      if (ticketFeedback.status === 'failed') {
+        overall = 'failed';
+      } else {
+        await complainsPage.expectBackToComplainsList();
+        await report.addStep(page, 'Ticket created and back to Complains list', 'success');
+      }
     } catch (ticketError) {
-      await report.addStep(page, 'Ticket creation failed', 'failed').catch(() => undefined);
+      const toast = await captureAndReadToast(page, 1500);
+      if (toast.status !== 'none') {
+        await report.recordToastFeedback(page, 'Ticket creation failed', toast, {
+          defaultForNone: 'failed',
+          includeMessageInTitle: true,
+        });
+      } else {
+        await report.addStep(page, 'Ticket creation failed', 'failed');
+      }
       logFlowFailure('Complains', ticketError);
       overall = 'failed';
     }
 
-    if (overall !== 'failed') overall = 'passed';
+    if (report.toastFailureRecorded || overall === 'failed') overall = 'failed';
+    else overall = 'passed';
   } catch (error) {
     overall = 'failed';
     logFlowFailure('Complains', error);

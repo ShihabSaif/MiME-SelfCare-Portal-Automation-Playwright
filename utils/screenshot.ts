@@ -39,6 +39,38 @@ const TOAST_SELECTOR = [
   '[role="alert"]',
 ].join(', ');
 
+export async function anyToastVisible(page: Page): Promise<boolean> {
+  const toasts = page.locator(TOAST_SELECTOR);
+  const n = await toasts.count().catch(() => 0);
+  for (let i = 0; i < n; i++) {
+    if (await toasts.nth(i).isVisible().catch(() => false)) return true;
+  }
+  return false;
+}
+
+export async function waitForToastsGone(page: Page, timeoutMs = 6_000): Promise<void> {
+  if (!(await anyToastVisible(page))) return;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!(await anyToastVisible(page))) return;
+    await page.waitForTimeout(80);
+  }
+}
+
+/** Poll until toaster appears; screenshot immediately when visible, then classify. */
+export async function pollForOutcomeToast(page: Page, maxMs = 8_000): Promise<ToastCapture | null> {
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    if (await anyToastVisible(page)) {
+      // Screenshot first while toaster is on screen, then read/classify.
+      const cap = await captureAndReadToast(page, 100);
+      if (cap.status === 'failed' || cap.status === 'success') return cap;
+    }
+    await page.waitForTimeout(80);
+  }
+  return null;
+}
+
 /**
  * Takes a screenshot that captures any visible toast/alert on the page.
  * Convenience wrapper — returns only the Buffer (use captureAndReadToast
@@ -89,18 +121,17 @@ export async function captureAndReadToast(
     const message = (await toast.innerText().catch(() => '')).trim().replace(/\s+/g, ' ');
     if (!message) continue;
     const cls = (await toast.getAttribute('class').catch(() => '')) ?? '';
-    const isError =
-      /Vue-Toastification__toast--error|toast-error|bg-danger|danger/i.test(cls) ||
-      /\b(error|failed|invalid|unable|wrong)\b/i.test(message);
+    const isError = isVueToastError(message, cls);
     const isSuccess =
-      /Vue-Toastification__toast--success|toast-success|bg-success|success/i.test(cls) ||
-      /\b(success|successful|password changed)\b/i.test(message);
+      /Vue-Toastification__toast--success|toast-success|bg-success/i.test(cls) ||
+      (/\b(success|successful|ticket created)\b/i.test(message) && !isError);
 
-    if (isError) return { status: 'failed', message, screenshot };
-    if (isSuccess) return { status: 'success', message, screenshot };
+    if (isError) return finalizeToastCapture(page, { status: 'failed', message, screenshot });
+    if (isSuccess) return finalizeToastCapture(page, { status: 'success', message, screenshot });
 
     const byText = classifyByText(message);
-    if (byText) return { status: byText, message, screenshot };
+    if (byText === 'failed') return finalizeToastCapture(page, { status: 'failed', message, screenshot });
+    if (byText === 'success') return finalizeToastCapture(page, { status: 'success', message, screenshot });
   }
 
   // ── Bootstrap-Vue toasts ─────────────────────────────────────────────────
@@ -118,24 +149,25 @@ export async function captureAndReadToast(
     const isError   = /error/i.test(headerText) || /b-toast-danger|toast-danger|bg-danger/i.test(`${outerCls} ${toastCls}`);
     const isSuccess = /success/i.test(headerText) || /b-toast-success|toast-success|bg-success/i.test(`${outerCls} ${toastCls}`);
 
-    if (isError)   return { status: 'failed',  message, screenshot };
-    if (isSuccess) return { status: 'success', message, screenshot };
+    if (isError) return finalizeToastCapture(page, { status: 'failed', message, screenshot });
+    if (isSuccess) return finalizeToastCapture(page, { status: 'success', message, screenshot });
 
     const byText = classifyByText(message);
-    if (byText) return { status: byText, message, screenshot };
+    if (byText === 'failed') return finalizeToastCapture(page, { status: 'failed', message, screenshot });
+    if (byText === 'success') return finalizeToastCapture(page, { status: 'success', message, screenshot });
   }
 
   // ── Bootstrap alert classes ──────────────────────────────────────────────
   const danger = page.locator('.alert-danger').filter({ visible: true }).first();
   if (await danger.isVisible().catch(() => false)) {
     const message = (await danger.innerText().catch(() => '')).trim();
-    if (message) return { status: 'failed', message, screenshot };
+    if (message) return finalizeToastCapture(page, { status: 'failed', message, screenshot });
   }
 
   const success = page.locator('.alert-success').filter({ visible: true }).first();
   if (await success.isVisible().catch(() => false)) {
     const message = (await success.innerText().catch(() => '')).trim();
-    if (message) return { status: 'success', message, screenshot };
+    if (message) return finalizeToastCapture(page, { status: 'success', message, screenshot });
   }
 
   // ── Generic role="alert" ─────────────────────────────────────────────────
@@ -145,15 +177,37 @@ export async function captureAndReadToast(
     const message = (await alerts.nth(i).innerText().catch(() => '')).trim();
     if (!message) continue;
     const byText = classifyByText(message);
-    if (byText) return { status: byText, message, screenshot };
+    if (byText === 'failed') return finalizeToastCapture(page, { status: 'failed', message, screenshot });
+    if (byText === 'success') return finalizeToastCapture(page, { status: 'success', message, screenshot });
   }
 
   return { status: 'none', message: '', screenshot };
 }
 
+async function finalizeToastCapture(page: Page, result: ToastCapture): Promise<ToastCapture> {
+  if (result.status === 'success' || result.status === 'failed') {
+    await waitForToastsGone(page);
+  }
+  return result;
+}
+
+function isVueToastError(message: string, cls: string): boolean {
+  if (/Vue-Toastification__toast--error|toast-error|bg-danger|danger/i.test(cls)) return true;
+  if (/Vue-Toastification__toast--default/i.test(cls) && /\b(error|fetching|unexpected)\b/i.test(message)) {
+    return true;
+  }
+  if (/^error!?(\s|$)/i.test(message)) return true;
+  if (/\b(error fetching|unexpected error|failed|failure|invalid|unable|unsuccessful|wrong|exception)\b/i.test(message)) {
+    return true;
+  }
+  return false;
+}
+
 function classifyByText(text: string): 'success' | 'failed' | null {
-  if (/\b(error|failed|failure|invalid|unable|unsuccessful|wrong|exception)\b/i.test(text)) return 'failed';
-  if (/\b(success|successful|completed|saved|uploaded|approved|password changed)\b/i.test(text)) {
+  if (isVueToastError(text, '') || /\b(error|failed|failure|invalid|unable|unsuccessful|wrong|exception)\b/i.test(text)) {
+    return 'failed';
+  }
+  if (/\b(success|successful|completed|saved|uploaded|approved|password changed|ticket created)\b/i.test(text)) {
     return 'success';
   }
   return null;

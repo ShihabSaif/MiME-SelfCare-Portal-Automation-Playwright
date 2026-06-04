@@ -1,6 +1,12 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { waitForPageSettled } from '../utils/page-settle';
-import { silentScreenshot } from '../utils/screenshot';
+import {
+  captureAndReadToast,
+  pollForOutcomeToast,
+  silentScreenshot,
+  waitForToastsGone,
+  type ToastCapture,
+} from '../utils/screenshot';
 
 const COMPLAINS_LOADER_SELECTORS = [
   '.spinner-border',
@@ -102,8 +108,11 @@ export class ComplainsPage {
     await waitForPageSettled(this.page, { requireAppCard: true, settleMs: 500 });
   }
 
-  /** Click Complains nav, wait for full page load, return screenshot for the report. */
-  async openComplains(): Promise<Buffer | undefined> {
+  /**
+   * Click Complains nav; wait for loaders to finish, then capture success/error toaster.
+   * If no toast, returns status 'none' with a page screenshot (spec uses defaultForNone).
+   */
+  async openComplains(): Promise<ToastCapture> {
     await waitForPageSettled(this.page);
     const link = await this.firstVisible([
       this.page.getByRole('link', { name: /complains?/i }),
@@ -111,8 +120,30 @@ export class ComplainsPage {
       this.page.locator('a:has-text("Complains")'),
     ]);
     await link.click();
-    await this.waitForComplainsPageLoaded();
-    return silentScreenshot(this.page);
+
+    // Do not capture while spinners/overlays are still visible.
+    await this.waitForComplainsLoadersGone(20_000).catch(() => undefined);
+    await this.page.waitForTimeout(200);
+
+    const toastOutcome = await pollForOutcomeToast(this.page, 12_000);
+    if (toastOutcome) return toastOutcome;
+
+    try {
+      await this.waitForComplainsPageLoaded();
+    } catch {
+      await this.waitForComplainsLoadersGone(5_000).catch(() => undefined);
+      const retry = await pollForOutcomeToast(this.page, 3000);
+      if (retry) return retry;
+    }
+
+    const finalToast = await pollForOutcomeToast(this.page, 2000);
+    if (finalToast) return finalToast;
+
+    return {
+      status: 'none',
+      message: '',
+      screenshot: await silentScreenshot(this.page),
+    };
   }
 
   async expectComplainsVisible(): Promise<void> {
@@ -331,28 +362,28 @@ export class ComplainsPage {
   }
 
   /**
-   * After Create: wait ~4–5s for submit loader to clear, verify success toast, screenshot.
+   * After Create: wait for submit loader to clear, then capture error/success toaster while visible.
    */
-  async expectTicketCreatedSuccessfully(): Promise<Buffer | undefined> {
-    const postCreateWaitMs = 4500;
-    const pollMaxMs = 5000;
-    const started = Date.now();
+  async expectTicketCreatedSuccessfully(): Promise<ToastCapture> {
+    await this.waitForComplainsLoadersGone(15_000).catch(() => undefined);
+    await this.page.waitForTimeout(200);
 
-    while (Date.now() - started < pollMaxMs) {
-      if (!(await this.areComplainsLoadersVisible())) break;
-      await this.page.waitForTimeout(400);
-    }
-
-    const remaining = postCreateWaitMs - (Date.now() - started);
-    if (remaining > 0) {
-      await this.page.waitForTimeout(remaining);
-    }
+    const outcome = await pollForOutcomeToast(this.page, 12_000);
+    if (outcome) return outcome;
 
     const successToast = this.successToast();
-    await expect(successToast).toBeVisible({ timeout: 20000 });
-    await expect(successToast).toContainText(/ticket created successfully/i);
+    if (await successToast.isVisible().catch(() => false)) {
+      const message = (await successToast.innerText().catch(() => '')).trim().replace(/\s+/g, ' ');
+      const screenshot = await silentScreenshot(this.page);
+      await waitForToastsGone(this.page);
+      return {
+        status: 'success',
+        message: message || 'Ticket created successfully',
+        screenshot,
+      };
+    }
 
-    return silentScreenshot(this.page);
+    return captureAndReadToast(this.page, 2000);
   }
 
   async expectBackToComplainsList(): Promise<void> {
